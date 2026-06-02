@@ -19,7 +19,8 @@ jobs:
           protocol: ftps
           port: 21
           local-dir: ./
-          server-dir: /httpdocs/wp-content/plugins/oemm-backend-xxvi/
+          server-dir: /data/web/web17736/home/site/web/wp-content/plugins/oemm-backend-xxvi/
+          dangerous-clean-slate: false
           exclude: |
             **/.git*
             **/.git*/**
