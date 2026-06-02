@@ -4,8 +4,67 @@ $fullname = trim( $user->first_name . ' ' . $user->last_name ) ?: $user->display
 $username = $user->user_login;
 $initials = strtoupper( mb_substr( $fullname, 0, 1 ) );
 
-// Startnummer aus User-Meta
-$startnumber = get_user_meta( $user->ID, '_oemm_startnumber', true ) ?: '—';
+// Startnummer: erst Startlisten-Plugin, dann User-Meta
+function oemm_xxvi_get_startnumber( $user_id ) {
+    global $wpdb;
+    // Startlisten-Plugin: Tabelle wp_oemm_startliste oder aehnlich
+    $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}%startl%'" );
+    if ( empty($tables) ) $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}%startliste%'" );
+    // Fallback: alle Tabellen mit omm/oemm
+    if ( empty($tables) ) $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}omm%'" );
+    if ( empty($tables) ) $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}oemm%'" );
+    if ( ! empty($tables) ) {
+        foreach ( $tables as $table ) {
+            // Spaltennamen holen
+            $cols = $wpdb->get_col( "DESCRIBE $table", 0 );
+            // user_id + startnummer Spalte suchen
+            $uid_col = null; $nr_col = null;
+            foreach ($cols as $c) {
+                if ( in_array(strtolower($c), ['user_id','userid','wp_user_id','user']) ) $uid_col = $c;
+                if ( preg_match('/start.*(nr|number|num|numer)/i', $c) || strtolower($c) === 'startnummer' ) $nr_col = $c;
+            }
+            if ( $uid_col && $nr_col ) {
+                $nr = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT `$nr_col` FROM `$table` WHERE `$uid_col` = %d LIMIT 1", $user_id
+                ) );
+                if ( $nr ) return $nr;
+            }
+        }
+    }
+    // Fallback: User-Meta
+    return get_user_meta( $user_id, '_oemm_startnumber', true ) ?: null;
+}
+$startnumber = oemm_xxvi_get_startnumber( $user->ID ) ?: '—';
+
+// App-Link aus Startlisten-Plugin oder Option
+function oemm_xxvi_get_app_url( $user_id ) {
+    global $wpdb;
+    // Option-Tabelle nach App-URL suchen
+    $url = get_option('oemm_app_url') ?: get_option('omm_app_url') ?: get_option('oemm_xxvi_app_url') ?: '';
+    if ( $url ) return $url;
+    // Startlisten-Tabelle nach QR/App-URL suchen
+    $tables = array_merge(
+        $wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}%startl%'"),
+        $wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}omm%'"),
+        $wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}oemm%'")
+    );
+    foreach ( array_unique($tables) as $table ) {
+        $cols = $wpdb->get_col("DESCRIBE $table", 0);
+        $uid_col = null; $url_col = null;
+        foreach ($cols as $c) {
+            if ( in_array(strtolower($c), ['user_id','userid','wp_user_id']) ) $uid_col = $c;
+            if ( preg_match('/(qr|app|url|link)/i', $c) ) $url_col = $c;
+        }
+        if ( $uid_col && $url_col ) {
+            $u = $wpdb->get_var( $wpdb->prepare(
+                "SELECT `$url_col` FROM `$table` WHERE `$uid_col` = %d LIMIT 1", $user_id
+            ) );
+            if ( $u && filter_var($u, FILTER_VALIDATE_URL) ) return $u;
+        }
+    }
+    return 'https://app.mopedmarathon.at';
+}
+$app_url = oemm_xxvi_get_app_url( $user->ID );
 
 // HA-Status
 $ha_signed = get_user_meta( $user->ID, '_oemm_ha_signed_ts', true );
@@ -226,11 +285,10 @@ function oemm_status_badge( $status ) {
     <div class="oemm-ticket-left" style="flex-shrink:0;padding-right:24px;border-right:2px dashed rgba(255,255,255,.12);margin-right:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:110px;">
       <div style="font-family:'Oswald',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.35);margin-bottom:2px;">Startnummer</div>
       <?php if ( $startnumber !== '—' ) : ?>
-      <div style="font-family:'Oswald',sans-serif;font-size:82px;font-weight:700;color:#f0c040;line-height:.9;text-shadow:0 4px 30px rgba(240,192,64,.4);letter-spacing:-3px;"><?php echo esc_html($startnumber); ?></div>
+      <div style="font-family:'Oswald',sans-serif;font-size:96px;font-weight:700;color:#f0c040;line-height:.85;text-shadow:0 4px 30px rgba(240,192,64,.5);letter-spacing:-4px;"><?php echo esc_html($startnumber); ?></div>
       <?php else : ?>
       <div style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:rgba(255,255,255,.2);">TBA</div>
       <?php endif; ?>
-      <div style="margin-top:8px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);border-radius:20px;padding:2px 10px;font-family:'Oswald',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:#f0c040;">ÖMM 2026</div>
     </div>
     <!-- Event-Info rechts -->
     <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:12px;">
@@ -245,7 +303,7 @@ function oemm_status_badge( $status ) {
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a href="https://app.mopedmarathon.at" target="_blank" style="display:inline-flex;align-items:center;gap:7px;background:#f0c040;color:#1a1a2e;font-family:'Oswald',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:9px 18px;border-radius:10px;text-decoration:none;box-shadow:0 4px 14px rgba(240,192,64,.3);">🏍 Zur ÖMM App</a>
+        <a href="<?php echo esc_url($app_url); ?>" target="_blank" style="display:inline-flex;align-items:center;gap:7px;background:#f0c040;color:#1a1a2e;font-family:'Oswald',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:9px 18px;border-radius:10px;text-decoration:none;box-shadow:0 4px 14px rgba(240,192,64,.3);">🏍 Zur ÖMM App</a>
         <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.15);font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:9px 18px;border-radius:10px;text-decoration:none;">⬇ Downloads</a>
       </div>
     </div>

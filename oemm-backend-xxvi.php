@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.9.2
+ * Version:     1.9.3
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.9.2' );
+define( 'OEMM_XXVI_VERSION', '1.9.3' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -704,6 +704,72 @@ function oemm_xxvi_admin_regen_pdf() {
 
     $size = file_exists($filepath) ? filesize($filepath) : 0;
     wp_die( 'PDF regeneriert fuer ' . esc_html($fullname) . ' | Groesse: ' . $size . ' Bytes | <a href="' . esc_url($dl_url) . '">Download testen</a>' );
+}
+
+/* ---------------------------------------------------------------
+   ADMIN DIAGNOSE
+   Aufruf: /wp-admin/?oemm_diagnose=1
+--------------------------------------------------------------- */
+add_action( 'admin_init', 'oemm_xxvi_admin_diagnose' );
+function oemm_xxvi_admin_diagnose() {
+    if ( empty( $_GET['oemm_diagnose'] ) ) return;
+    if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Kein Zugriff.' );
+
+    global $wpdb;
+    $out = '<h2>OeMM Diagnose</h2><pre style="font-size:12px;">';
+
+    // Alle User mit HA unterzeichnet
+    $users = $wpdb->get_results(
+        "SELECT u.ID, u.user_login, u.display_name,
+                MAX(CASE WHEN m.meta_key='_oemm_ha_signed_ts'  THEN m.meta_value END) as signed_ts,
+                MAX(CASE WHEN m.meta_key='_oemm_startnumber'   THEN m.meta_value END) as startnr,
+                MAX(CASE WHEN m.meta_key='_oemm_ha_dl_file'    THEN m.meta_value END) as dl_file,
+                MAX(CASE WHEN m.meta_key='_oemm_ha_dl_url'     THEN m.meta_value END) as dl_url
+         FROM {$wpdb->users} u
+         JOIN {$wpdb->usermeta} m ON u.ID = m.user_id
+         WHERE m.meta_key IN ('_oemm_ha_signed_ts','_oemm_startnumber','_oemm_ha_dl_file','_oemm_ha_dl_url')
+         GROUP BY u.ID ORDER BY u.ID"
+    );
+    foreach ( $users as $u ) {
+        $file_ok  = $u->dl_file && file_exists($u->dl_file) ? 'OK (' . filesize($u->dl_file) . ' B)' : 'FEHLT';
+        $out .= "User #{$u->ID} {$u->user_login}\n";
+        $out .= "  Signed:     {$u->signed_ts}\n";
+        $out .= "  Startnr:    {$u->startnr}\n";
+        $out .= "  PDF:        {$file_ok}\n";
+        $out .= "  DL-URL:     {$u->dl_url}\n\n";
+    }
+
+    // Startlisten-Plugin Tabellen suchen
+    $tables = $wpdb->get_results( "SHOW TABLES", ARRAY_N );
+    $startliste_tables = [];
+    foreach ( $tables as $t ) {
+        if ( stripos($t[0], 'startli') !== false || stripos($t[0], 'oemm') !== false || stripos($t[0], 'omm') !== false ) {
+            $startliste_tables[] = $t[0];
+        }
+    }
+    $out .= "\nDatenbank-Tabellen mit 'startli'/'oemm'/'omm':\n";
+    foreach ( $startliste_tables as $t ) {
+        $out .= "  - $t\n";
+        $cols = $wpdb->get_results( "DESCRIBE $t", ARRAY_N );
+        foreach ( $cols as $c ) $out .= "      {$c[0]} ({$c[1]})\n";
+        $sample = $wpdb->get_results( "SELECT * FROM $t LIMIT 3" );
+        $out .= "    Sample: " . json_encode($sample) . "\n";
+    }
+
+    // Plugin-Options nach App-URL suchen
+    $opts = $wpdb->get_results(
+        "SELECT option_name, option_value FROM {$wpdb->options}
+         WHERE option_name LIKE '%oemm%' OR option_name LIKE '%omm%' OR option_name LIKE '%startlist%'
+         LIMIT 30"
+    );
+    $out .= "\nPlugin-Options (oemm/omm/startlist):\n";
+    foreach ( $opts as $o ) {
+        $val = strlen($o->option_value) > 200 ? substr($o->option_value,0,200).'...' : $o->option_value;
+        $out .= "  {$o->option_name}: $val\n";
+    }
+
+    $out .= '</pre>';
+    wp_die( $out );
 }
 
 /* ---------------------------------------------------------------
