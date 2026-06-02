@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.9.0
+ * Version:     1.9.1
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.9.0' );
+define( 'OEMM_XXVI_VERSION', '1.9.1' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -362,9 +362,13 @@ function oemm_xxvi_save_agreement( $user_id, $fullname, $username, $signed_ts, $
     ], home_url( '/' ) );
 
     // Als user meta speichern (einfacher als WC-Product)
-    update_user_meta( $user_id, '_oemm_ha_dl_url', $dl_url );
-    update_user_meta( $user_id, '_oemm_ha_dl_file', $filepath );
+    update_user_meta( $user_id, '_oemm_ha_dl_url',   $dl_url );
+    update_user_meta( $user_id, '_oemm_ha_dl_file',  $filepath );
     update_user_meta( $user_id, '_oemm_ha_signed_ts', $signed_ts );
+    // Sig-PNG fuer spatere Regenerierung aufbewahren
+    if ( ! empty( $sig_png ) ) {
+        update_user_meta( $user_id, '_oemm_ha_sig_png', $sig_png );
+    }
 }
 
 // Sicherer Download-Handler
@@ -384,9 +388,15 @@ function oemm_xxvi_download_handler() {
     if ( ! hash_equals( $expected, $token ) ) wp_die( 'Ungültiger Token.' );
     if ( ! file_exists( $filepath ) )         wp_die( 'Datei nicht gefunden.' );
 
+    // Alle bisherigen Ausgaben verwerfen (WordPress-Headers, Cookies, etc.)
+    if ( ob_get_level() ) ob_end_clean();
+
     header( 'Content-Type: application/pdf' );
     header( 'Content-Disposition: attachment; filename="Haftungsausschluss_OeMM_2026.pdf"' );
     header( 'Content-Length: ' . filesize( $filepath ) );
+    header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+    header( 'Pragma: no-cache' );
+    header( 'Expires: 0' );
     readfile( $filepath );
     exit;
 }
@@ -634,6 +644,43 @@ if ( ! function_exists('fpdf_rounded_rect_patched') ) {
             }
         }
     }
+}
+
+/* ---------------------------------------------------------------
+   PDF REGENERATE — Admin-Funktion fuer bestehende User
+   Aufruf: /wp-admin/?oemm_regen_pdf=USER_ID
+--------------------------------------------------------------- */
+add_action( 'admin_init', 'oemm_xxvi_admin_regen_pdf' );
+function oemm_xxvi_admin_regen_pdf() {
+    if ( empty( $_GET['oemm_regen_pdf'] ) ) return;
+    if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Kein Zugriff.' );
+    $uid = absint( $_GET['oemm_regen_pdf'] );
+    $u   = get_user_by( 'id', $uid );
+    if ( ! $u ) wp_die( 'User nicht gefunden.' );
+
+    $fullname  = trim( $u->first_name . ' ' . $u->last_name ) ?: $u->display_name;
+    $username  = $u->user_login;
+    $signed_ts = get_user_meta( $uid, '_oemm_ha_signed_ts', true ) ?: date('d.m.Y H:i:s');
+    $sig_png   = get_user_meta( $uid, '_oemm_ha_sig_png',  true ) ?: '';
+
+    $upload   = wp_upload_dir();
+    $dir      = trailingslashit( $upload['basedir'] ) . 'oemm-agreements/';
+    wp_mkdir_p( $dir );
+    $filename = 'ha-' . $uid . '.pdf';
+    $filepath = $dir . $filename;
+
+    oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png );
+
+    $dl_url = add_query_arg( [
+        'oemm_dl' => 1,
+        'uid'     => $uid,
+        'token'   => hash( 'sha256', AUTH_KEY . $uid . $filename ),
+    ], home_url( '/' ) );
+    update_user_meta( $uid, '_oemm_ha_dl_url',  $dl_url );
+    update_user_meta( $uid, '_oemm_ha_dl_file', $filepath );
+
+    $size = file_exists($filepath) ? filesize($filepath) : 0;
+    wp_die( 'PDF regeneriert fuer ' . esc_html($fullname) . ' | Groesse: ' . $size . ' Bytes | <a href="' . esc_url($dl_url) . '">Download testen</a>' );
 }
 
 /* ---------------------------------------------------------------

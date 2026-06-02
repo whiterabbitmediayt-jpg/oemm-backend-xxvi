@@ -88,14 +88,7 @@ body.oemm-account-page { padding-top:0!important; }
   color: #fff;
   letter-spacing: .5px;
 }
-.oemm-logo-sub {
-  font-family: 'Oswald', sans-serif;
-  font-size: 10px;
-  color: rgba(240,192,64,.8);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-top: 3px;
-}
+/* subzeile ausgeblendet */
 
 /* SIDEBAR CARD */
 .oemm-sidebar-card {
@@ -115,19 +108,19 @@ body.oemm-account-page { padding-top:0!important; }
 }
 .oemm-avatar-wrap { position: relative; flex-shrink: 0; }
 .oemm-avatar-img {
-  width: 62px; height: 62px;
+  width: 86px; height: 86px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(255,255,255,.18);
+  border: 3px solid rgba(255,255,255,.2);
 }
 .oemm-avatar-circle {
-  width: 62px; height: 62px;
+  width: 86px; height: 86px;
   border-radius: 50%;
   background: linear-gradient(135deg,#2563eb,#1e40af);
   display: flex; align-items: center; justify-content: center;
   font-family: 'Oswald',sans-serif;
-  font-size: 26px; font-weight: 700; color: #fff;
-  border: 2px solid rgba(255,255,255,.15);
+  font-size: 36px; font-weight: 700; color: #fff;
+  border: 3px solid rgba(255,255,255,.18);
 }
 .oemm-avatar-edit {
   position: absolute; bottom: 0; right: 0;
@@ -259,39 +252,43 @@ body.oemm-account-page { padding-top:0!important; }
   .oemm-logo-block img { width: 70px; height: 70px; }
   .oemm-logo-text { font-size: 18px; }
 
-  /* Mobile Nav: horizontal, scrollbar, größere Touch-Targets */
+  /* Mobile Nav: 3-Spalten-Grid, kein Scrollen */
   .oemm-nav-scroll {
-    display: flex;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 0;
   }
-  .oemm-nav-scroll::-webkit-scrollbar { display: none; }
   .oemm-nav-item {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    padding: 12px 16px;
+    gap: 4px;
+    padding: 11px 8px;
     border-bottom: none !important;
     border-left: none !important;
     border-bottom: 3px solid transparent !important;
-    min-width: 80px;
-    flex-shrink: 0;
+    border-right: 1px solid rgba(255,255,255,.04) !important;
   }
   .oemm-nav-item.active {
     background: rgba(240,192,64,.1);
     border-bottom-color: #f0c040 !important;
   }
-  .oemm-nav-icon { font-size: 20px; width: auto; }
-  .oemm-nav-label { font-size: 11px; white-space: nowrap; }
-  .oemm-nav-logout { display: none; } /* im Mobile Menü ausblenden, separater Logout-Button unten */
+  .oemm-nav-icon { font-size: 18px; width: auto; }
+  .oemm-nav-label { font-size: 10px; white-space: nowrap; text-align: center; }
+  .oemm-nav-logout { display: none; }
 
-  /* Header Row auf Mobile: Countdown unter Titel */
+  /* Header Row auf Mobile: Countdown unter Titel, volle Breite */
   .oemm-header-row { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .oemm-countdown-inline { width: 100%; justify-content: center; }
-  .cd-val { font-size: 32px; }
+  .oemm-countdown-inline {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  .cd-val { font-size: 26px; }
+  .cd-sep { font-size: 20px; }
+  /* Rechts-Info im Countdown auf Mobile ausblenden */
+  .oemm-countdown-inline > div:last-child { display: none; }
 }
 </style>
 </head>
@@ -307,10 +304,7 @@ body.oemm-account-page { padding-top:0!important; }
       <!-- LOGO -->
       <a href="<?php echo esc_url(wc_get_account_endpoint_url('omm-dashboard')); ?>" class="oemm-logo-block">
         <img src="https://www.mopedmarathon.at/wp-content/uploads/2023/10/cropped-rocky-512x512-1.png" alt="Rocky">
-        <div>
-          <div class="oemm-logo-text">ÖTZTALER<br>MOPED<br>VEREIN</div>
-          <div class="oemm-logo-sub">mopedmarathon.at</div>
-        </div>
+        <div class="oemm-logo-text">ÖTZTALER<br>MOPED<br>VEREIN</div>
       </a>
 
       <!-- CARD: PROFIL + NAV -->
