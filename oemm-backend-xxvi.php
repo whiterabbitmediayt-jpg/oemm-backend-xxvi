@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.8.0
+ * Version:     1.9.0
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.8.0' );
+define( 'OEMM_XXVI_VERSION', '1.9.0' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -122,6 +122,10 @@ function oemm_xxvi_add_endpoints() {
     add_rewrite_endpoint( 'omm-downloads',      EP_ROOT | EP_PAGES );
     add_rewrite_endpoint( 'omm-adresse',        EP_ROOT | EP_PAGES );
     add_rewrite_endpoint( 'omm-kontodetails',   EP_ROOT | EP_PAGES );
+    add_rewrite_endpoint( 'omm-packliste',      EP_ROOT | EP_PAGES );
+    add_rewrite_endpoint( 'omm-freundebuch',    EP_ROOT | EP_PAGES );
+    add_rewrite_endpoint( 'omm-ergebnisse',     EP_ROOT | EP_PAGES );
+    add_rewrite_endpoint( 'omm-fotos',          EP_ROOT | EP_PAGES );
 }
 
 /* ---------------------------------------------------------------
@@ -162,6 +166,10 @@ function oemm_xxvi_menu_items( $items ) {
     return [
         'omm-dashboard'      => '⊞ Dashboard',
         'omm-bestellungen'   => '📦 Bestellungen',
+        'omm-packliste'      => '✅ Packliste',
+        'omm-freundebuch'    => '👥 Freundebuch',
+        'omm-ergebnisse'     => '🏁 Ergebnisse',
+        'omm-fotos'          => '📷 Meine Fotos',
         'omm-downloads'      => '⬇ Downloads',
         'omm-adresse'        => '📍 Adresse',
         'omm-kontodetails'   => '⚙ Kontodetails',
@@ -215,6 +223,24 @@ function oemm_xxvi_page_kontodetails() {
     include OEMM_XXVI_PATH . 'views/kontodetails.php';
 }
 
+// NEUE SEITEN: Placeholder-Callbacks (Inhalt kommt in späterer Version)
+add_action( 'woocommerce_account_omm-packliste_endpoint',   'oemm_xxvi_page_packliste' );
+add_action( 'woocommerce_account_omm-freundebuch_endpoint', 'oemm_xxvi_page_freundebuch' );
+add_action( 'woocommerce_account_omm-ergebnisse_endpoint',  'oemm_xxvi_page_ergebnisse' );
+add_action( 'woocommerce_account_omm-fotos_endpoint',       'oemm_xxvi_page_fotos' );
+
+function oemm_xxvi_placeholder_page( $title, $icon, $desc ) {
+    echo '<div style="text-align:center;padding:60px 20px;">';
+    echo '<span style="font-size:48px;display:block;margin-bottom:16px">' . $icon . '</span>';
+    echo '<h2 style="font-family:Oswald,sans-serif;font-size:22px;color:#fff;margin-bottom:8px">' . esc_html($title) . '</h2>';
+    echo '<p style="color:rgba(255,255,255,.4);font-size:14px">' . esc_html($desc) . '</p>';
+    echo '</div>';
+}
+function oemm_xxvi_page_packliste()   { oemm_xxvi_placeholder_page('Packliste','✅','Deine persönliche Packliste für den ÖMM 2026 — bald verfügbar.'); }
+function oemm_xxvi_page_freundebuch() { oemm_xxvi_placeholder_page('Freundebuch','👥','Wer fährt noch mit? Das Freundebuch kommt bald.'); }
+function oemm_xxvi_page_ergebnisse()  { oemm_xxvi_placeholder_page('Ergebnisse','🏁','Die Ergebnisliste wird nach dem Event veröffentlicht.'); }
+function oemm_xxvi_page_fotos()       { oemm_xxvi_placeholder_page('Meine Fotos','📷','Deine Fotos vom ÖMM 2026 — nach dem Event hier abrufbar.'); }
+
 // Dashboard als Standard-Landingpage nach Login
 add_filter( 'woocommerce_login_redirect', 'oemm_xxvi_login_redirect', 10, 2 );
 function oemm_xxvi_login_redirect( $redirect, $user ) {
@@ -242,6 +268,10 @@ function oemm_xxvi_redirect_dashboard() {
     if ( strpos( $uri, 'omm-downloads' )      !== false ) return;
     if ( strpos( $uri, 'omm-adresse' )        !== false ) return;
     if ( strpos( $uri, 'omm-kontodetails' )   !== false ) return;
+    if ( strpos( $uri, 'omm-packliste' )       !== false ) return;
+    if ( strpos( $uri, 'omm-freundebuch' )     !== false ) return;
+    if ( strpos( $uri, 'omm-ergebnisse' )      !== false ) return;
+    if ( strpos( $uri, 'omm-fotos' )           !== false ) return;
 
     // Nur auf exaktem /my-account/ (ohne Endpoint)
     if ( is_account_page() && ! is_wc_endpoint_url() ) {
@@ -646,7 +676,7 @@ function oemm_xxvi_full_width_template( $template ) {
         return OEMM_XXVI_PATH . 'views/ha-standalone.php';
     }
     // Alle anderen ÖMM-Seiten: Dashboard-Layout mit Sidebar
-    $oemm_pages = [ 'omm-dashboard', 'omm-bestellungen', 'omm-downloads', 'omm-adresse', 'omm-kontodetails' ];
+    $oemm_pages = [ 'omm-dashboard', 'omm-bestellungen', 'omm-downloads', 'omm-adresse', 'omm-kontodetails', 'omm-packliste', 'omm-freundebuch', 'omm-ergebnisse', 'omm-fotos' ];
     foreach ( $oemm_pages as $page ) {
         if ( strpos( $uri, $page ) !== false ) {
             return OEMM_XXVI_PATH . 'views/full-width.php';

@@ -192,11 +192,7 @@ function oemm_status_badge( $status ) {
   }
 </style>
 
-<!-- PAGE HEADER -->
-<div style="margin-bottom:22px;">
-  <h1 style="font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:#fff;letter-spacing:-0.2px;margin-bottom:4px;">Mein ÖMV Account</h1>
-  <p style="font-size:13px;color:rgba(255,255,255,0.4);">Willkommen zurück, <strong style="color:rgba(255,255,255,0.65)"><?php echo esc_html($fullname); ?></strong></p>
-</div>
+<!-- HA-Banner ggf. hier einfügen, Page-Header kommt aus full-width.php -->
 
 <!-- HA STATUS -->
 <?php if ( $ha_signed ) : ?>
