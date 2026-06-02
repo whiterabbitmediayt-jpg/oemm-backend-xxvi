@@ -15,9 +15,17 @@ defined( 'ABSPATH' ) || exit;
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 /* ÖMM Full-Width Override */
-html, body { background: #1a1a2e !important; margin: 0; padding: 0; }
+html, body {
+  background: radial-gradient(ellipse at 50% 20%, #1a3a6e 0%, #0d1b3e 50%, #060d1f 100%) !important;
+  background-attachment: fixed !important;
+  margin: 0; padding: 0;
+  overflow-x: hidden;
+}
 * { box-sizing: border-box; }
-.oemm-fw-page { min-height: 100vh; background: #1a1a2e; font-family: 'Inter', system-ui, sans-serif; }
+.oemm-fw-page {
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+}
 
 /* ALLES vom Theme ausblenden */
 #masthead, .site-header, header.site-header,
@@ -42,16 +50,56 @@ html, body { background: #1a1a2e !important; margin: 0; padding: 0; }
     width: 100% !important;
 }
 body.oemm-account-page { padding-top: 0 !important; }
+
+/* LAYOUT */
+.oemm-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .oemm-layout {
+    grid-template-columns: 1fr;
+    padding: 16px 14px 40px;
+    gap: 16px;
+  }
+  .oemm-sidebar {
+    position: static !important;
+    width: 100% !important;
+  }
+  /* Sidebar Nav horizontal scrollen auf Mobile */
+  .oemm-nav-list {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 0;
+    border-radius: 0 0 16px 16px;
+  }
+  .oemm-nav-list a {
+    white-space: nowrap;
+    flex-shrink: 0;
+    border-bottom: none !important;
+    border-right: 1px solid rgba(255,255,255,.05) !important;
+    padding: 10px 14px !important;
+    font-size: 12px !important;
+  }
+}
 </style>
 </head>
 <body <?php body_class('oemm-account-page'); ?>>
 <?php wp_body_open(); ?>
 
 <div class="oemm-fw-page">
-  <div style="max-width:1100px;margin:0 auto;padding:32px 20px 60px;display:grid;grid-template-columns:220px 1fr;gap:28px;align-items:start">
+  <div class="oemm-layout">
 
     <!-- SIDEBAR NAVIGATION -->
-    <div style="position:sticky;top:24px">
+    <div class="oemm-sidebar" style="position:sticky;top:24px">
       <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden">
         
         <!-- User Info -->
@@ -85,7 +133,7 @@ body.oemm-account-page { padding-top: 0 !important; }
           <span style="font-size:16px;width:20px;text-align:center"><?php echo $item[0]; ?></span>
           <span style="font-size:13px;font-weight:<?php echo $active ? '700' : '500'; ?>;color:<?php echo $active ? '#f0c040' : 'rgba(255,255,255,.65)'; ?>"><?php echo esc_html($item[1]); ?></span>
         </a>
-        <?php endforeach; ?>
+        <?php endforeach; // end nav items ?>
 
         <!-- Logout -->
         <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>" style="display:flex;align-items:center;gap:10px;padding:12px 18px;text-decoration:none;border-top:1px solid rgba(255,255,255,.07);transition:background .12s" onmouseover="this.style.background='rgba(255,100,100,.08)'" onmouseout="this.style.background=''">
