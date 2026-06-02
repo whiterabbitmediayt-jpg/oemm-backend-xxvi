@@ -397,6 +397,33 @@ h2{font-size:13px;text-transform:uppercase;color:#555;margin:20px 0 6px}
 }
 
 /* ---------------------------------------------------------------
+   FULL-WIDTH TEMPLATE — WC-Wrapper entfernen auf ÖMM-Seiten
+--------------------------------------------------------------- */
+add_filter( 'template_include', 'oemm_xxvi_full_width_template', 99 );
+function oemm_xxvi_full_width_template( $template ) {
+    if ( ! is_account_page() ) return $template;
+    if ( ! is_user_logged_in() ) return $template;
+    $user = wp_get_current_user();
+    if ( oemm_xxvi_is_admin_user( $user ) ) return $template;
+
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    $oemm_pages = [ 'omm-dashboard', 'omm-bestellungen', 'omm-downloads', 'omm-adresse', 'omm-kontodetails', 'haftungsausschluss' ];
+    foreach ( $oemm_pages as $page ) {
+        if ( strpos( $uri, $page ) !== false ) {
+            return OEMM_XXVI_PATH . 'views/full-width.php';
+        }
+    }
+    return $template;
+}
+
+// Logout-Link fixen
+add_filter( 'woocommerce_get_endpoint_url', 'oemm_xxvi_fix_logout', 10, 4 );
+function oemm_xxvi_fix_logout( $url, $endpoint, $value, $permalink ) {
+    if ( $endpoint !== 'customer-logout' ) return $url;
+    return wp_logout_url( home_url() );
+}
+
+/* ---------------------------------------------------------------
    ASSETS
 --------------------------------------------------------------- */
 add_action( 'wp_enqueue_scripts', 'oemm_xxvi_enqueue' );
