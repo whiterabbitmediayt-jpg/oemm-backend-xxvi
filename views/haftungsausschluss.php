@@ -14,16 +14,16 @@ $initials = strtoupper( substr( $fullname, 0, 1 ) );
 .gate-title{font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:4px}
 .gate-subtitle{font-size:13px;color:rgba(255,255,255,.35);margin-bottom:20px}
 .doc-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;margin-bottom:16px;overflow:hidden}
-.doc-body{padding:22px 24px;font-size:13px;color:rgba(255,255,255,.55);line-height:1.75}
+.doc-body{padding:22px 24px;font-size:13px;color:rgba(255,255,255,.85);line-height:1.75}
 .doc-body h4{font-family:'Oswald',sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);margin:16px 0 5px}
 .doc-body h4:first-child{margin-top:0}
-.doc-body p{margin:0 0 8px}
+.doc-body p{margin:0 0 8px;color:rgba(255,255,255,.82)}
 .sig-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;margin-bottom:16px;overflow:hidden}
 .sig-header{padding:14px 20px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
 .sig-header h3{font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;color:rgba(255,255,255,.8);margin:0 0 2px}
 .sig-header p{font-size:12px;color:rgba(255,255,255,.3);margin:0}
-.sig-canvas-wrap{position:relative;background:rgba(255,255,255,.02)}
-#omm-sig-canvas{display:block;width:100%;height:160px;cursor:crosshair;touch-action:none}
+.sig-canvas-wrap{position:relative;background:#fff}
+#omm-sig-canvas{display:block;width:100%;height:160px;cursor:crosshair;touch-action:none;background:#fff}
 .sig-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(255,255,255,.12);pointer-events:none;font-style:italic;transition:opacity .3s}
 .sig-line{position:absolute;bottom:32px;left:5%;right:5%;height:1px;background:rgba(255,255,255,.08);pointer-events:none}
 .sig-actions{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid rgba(255,255,255,.06)}
@@ -148,7 +148,7 @@ $initials = strtoupper( substr( $fullname, 0, 1 ) );
     var dpr = window.devicePixelRatio||1;
     canvas.width = rect.width*dpr; canvas.height = rect.height*dpr;
     ctx.scale(dpr,dpr);
-    ctx.strokeStyle = '#f0c040'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f3460'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   }
   resize(); window.addEventListener('resize', resize);
 
