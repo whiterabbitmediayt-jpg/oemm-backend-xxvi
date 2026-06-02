@@ -99,41 +99,71 @@ body.oemm-account-page { padding-top: 0 !important; }
   <div class="oemm-layout">
 
     <!-- SIDEBAR NAVIGATION -->
+    <?php
+    $user     = wp_get_current_user();
+    $fullname = trim($user->first_name . ' ' . $user->last_name) ?: $user->display_name;
+    $firstname = $user->first_name ?: $user->display_name;
+    $lastname  = $user->last_name ?: '';
+    $initials  = strtoupper(mb_substr($fullname, 0, 1));
+    $uri       = $_SERVER['REQUEST_URI'] ?? '';
+    // Profilbild
+    $avatar_url = get_user_meta($user->ID, '_oemm_avatar_url', true);
+    ?>
     <div class="oemm-sidebar" style="position:sticky;top:24px">
+
+      <!-- LOGO BLOCK -->
+      <a href="<?php echo esc_url(wc_get_account_endpoint_url('omm-dashboard')); ?>" style="display:flex;align-items:center;gap:14px;margin-bottom:14px;text-decoration:none;padding:4px 2px;">
+        <img src="https://www.mopedmarathon.at/wp-content/uploads/2023/10/cropped-rocky-512x512-1.png"
+             style="width:72px;height:72px;object-fit:contain;filter:brightness(0) invert(1);opacity:.95;flex-shrink:0" alt="Rocky">
+        <div style="font-family:'Oswald',sans-serif;font-weight:700;font-size:17px;text-transform:uppercase;line-height:1.3;color:#fff;">ÖTZTALER<br>MOPED<br>VEREIN</div>
+      </a>
+
       <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden">
-        
-        <!-- User Info -->
-        <?php $user = wp_get_current_user();
-        $fullname = trim($user->first_name . ' ' . $user->last_name) ?: $user->display_name;
-        $initials = strtoupper(mb_substr($fullname, 0, 1));
-        ?>
-        <div style="padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:12px">
-          <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#f0c040,#e8a800);display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:#1a1a2e;flex-shrink:0"><?php echo esc_html($initials); ?></div>
-          <div style="min-width:0">
-            <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?php echo esc_html($fullname); ?></div>
-            <div style="font-size:11px;color:rgba(255,255,255,.35)">@<?php echo esc_html($user->user_login); ?></div>
+
+        <!-- PROFIL -->
+        <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.07);">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <!-- Avatar -->
+            <div style="position:relative;flex-shrink:0;">
+              <?php if ( $avatar_url ) : ?>
+                <img src="<?php echo esc_url($avatar_url); ?>" style="width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.15)" alt="">
+              <?php else : ?>
+                <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#1e40af);display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;color:#fff;"><?php echo esc_html($initials); ?></div>
+              <?php endif; ?>
+              <label for="oemm-avatar-upload" style="position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;background:#f0c040;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;" title="Foto ändern">✎</label>
+              <input type="file" id="oemm-avatar-upload" accept="image/*" style="display:none" onchange="ommUploadAvatar(this)">
+            </div>
+            <!-- Name -->
+            <div style="min-width:0;">
+              <div style="font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?php echo esc_html($fullname); ?></div>
+              <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:1px;">@<?php echo esc_html($user->user_login); ?></div>
+              <div style="font-size:11px;color:rgba(240,192,64,.7);margin-top:1px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.5px;">Teilnehmer 2026</div>
+            </div>
           </div>
         </div>
 
-        <!-- Nav Items -->
+        <!-- NAV ITEMS -->
         <?php
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
         $nav = [
-            'omm-dashboard'    => ['⊞', 'Dashboard'],
+            'omm-dashboard'    => ['⊞',  'Dashboard'],
             'omm-bestellungen' => ['📦', 'Bestellungen'],
-            'omm-downloads'    => ['⬇', 'Downloads'],
+            'omm-downloads'    => ['⬇',  'Downloads'],
             'omm-adresse'      => ['📍', 'Adresse'],
-            'omm-kontodetails' => ['⚙', 'Kontodetails'],
+            'omm-kontodetails' => ['⚙',  'Kontodetails'],
         ];
         foreach ( $nav as $endpoint => $item ) :
             $active = strpos($uri, $endpoint) !== false;
-            $url = wc_get_account_endpoint_url($endpoint);
+            $url    = wc_get_account_endpoint_url($endpoint);
+            $style  = $active
+                ? 'background:rgba(240,192,64,.1);border-left:3px solid #f0c040;padding-left:15px;'
+                : 'border-left:3px solid transparent;padding-left:15px;';
         ?>
-        <a href="<?php echo esc_url($url); ?>" style="display:flex;align-items:center;gap:10px;padding:12px 18px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.05);transition:all .12s;<?php echo $active ? 'background:rgba(240,192,64,.1);border-left:3px solid #f0c040;' : ''; ?>" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background='<?php echo $active ? 'rgba(240,192,64,.1)' : ''; ?>'">
-          <span style="font-size:16px;width:20px;text-align:center"><?php echo $item[0]; ?></span>
+        <a href="<?php echo esc_url($url); ?>"
+           style="display:flex;align-items:center;gap:10px;padding:11px 18px 11px 15px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.04);transition:all .12s;<?php echo $style; ?>">
+          <span style="font-size:15px;width:20px;text-align:center;color:<?php echo $active ? '#f0c040' : 'rgba(255,255,255,.5)'; ?>"><?php echo $item[0]; ?></span>
           <span style="font-size:13px;font-weight:<?php echo $active ? '700' : '500'; ?>;color:<?php echo $active ? '#f0c040' : 'rgba(255,255,255,.65)'; ?>"><?php echo esc_html($item[1]); ?></span>
         </a>
-        <?php endforeach; // end nav items ?>
+        <?php endforeach; ?>
 
         <!-- Logout -->
         <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>" style="display:flex;align-items:center;gap:10px;padding:12px 18px;text-decoration:none;border-top:1px solid rgba(255,255,255,.07);transition:background .12s" onmouseover="this.style.background='rgba(255,100,100,.08)'" onmouseout="this.style.background=''">
@@ -142,12 +172,21 @@ body.oemm-account-page { padding-top: 0 !important; }
         </a>
       </div>
 
-      <!-- ÖMV Logo -->
-      <div style="text-align:center;margin-top:20px;opacity:.3">
-        <img src="https://www.mopedmarathon.at/wp-content/uploads/2023/10/cropped-rocky-512x512-1.png" style="width:36px;filter:brightness(0) invert(1)" alt="Rocky">
-        <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:4px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px">ÖMV 2026</div>
-      </div>
     </div>
+
+<script>
+function ommUploadAvatar(input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  var formData = new FormData();
+  formData.append('action', 'oemm_upload_avatar');
+  formData.append('nonce', '<?php echo wp_create_nonce("oemm_avatar"); ?>');
+  formData.append('avatar', file);
+  fetch('<?php echo admin_url("admin-ajax.php"); ?>', {method:'POST', body:formData})
+    .then(r => r.json())
+    .then(d => { if(d.success && d.data.url) location.reload(); });
+}
+</script>
 
     <!-- MAIN CONTENT -->
     <div>

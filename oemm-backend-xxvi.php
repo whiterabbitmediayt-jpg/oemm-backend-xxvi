@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.6.0
+ * Version:     1.7.0
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.6.0' );
+define( 'OEMM_XXVI_VERSION', '1.7.0' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -319,9 +319,9 @@ function oemm_xxvi_save_agreement( $user_id, $fullname, $username, $signed_ts, $
         file_put_contents( $dir . '.htaccess', 'deny from all' . PHP_EOL );
         file_put_contents( $dir . 'index.php', '<?php // silence' . PHP_EOL );
     }
-    $filename = 'ha-' . $user_id . '.html';
+    $filename = 'ha-' . $user_id . '.pdf';
     $filepath = $dir . $filename;
-    file_put_contents( $filepath, oemm_xxvi_agreement_html( $fullname, $username, $signed_ts, $sig_png ) );
+    oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png );
 
     // WC Download Permission anlegen
     $dl_key = 'oemm_ha_' . $user_id;
@@ -354,46 +354,206 @@ function oemm_xxvi_download_handler() {
     if ( ! hash_equals( $expected, $token ) ) wp_die( 'Ungültiger Token.' );
     if ( ! file_exists( $filepath ) )         wp_die( 'Datei nicht gefunden.' );
 
-    header( 'Content-Type: text/html; charset=utf-8' );
-    header( 'Content-Disposition: attachment; filename="Haftungsausschluss_OeMM_2026.html"' );
+    header( 'Content-Type: application/pdf' );
+    header( 'Content-Disposition: attachment; filename="Haftungsausschluss_OeMM_2026.pdf"' );
     header( 'Content-Length: ' . filesize( $filepath ) );
     readfile( $filepath );
     exit;
 }
 
-function oemm_xxvi_agreement_html( $fullname, $username, $signed_ts, $sig_png ) {
-    return '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
-<title>Haftungsausschluss ÖMM 2026</title>
-<style>body{font-family:Arial,sans-serif;font-size:13px;line-height:1.7;color:#222;max-width:720px;margin:40px auto;padding:0 24px}
-h1{font-size:20px;color:#0f3460;border-bottom:2px solid #0f3460;padding-bottom:8px;margin-bottom:20px}
-h2{font-size:13px;text-transform:uppercase;color:#555;margin:20px 0 6px}
-.meta{background:#f5f5f5;border-radius:8px;padding:14px 18px;margin:20px 0}
-.sig-box{border:1px solid #ccc;border-radius:8px;padding:12px;margin:20px 0;text-align:center}
-.sig-box img{max-width:100%;height:120px}
-.warn{background:#fff8e1;border:1px solid #f0c040;border-radius:6px;padding:10px 14px;margin:14px 0}
-.footer{margin-top:40px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#aaa}
-@media print{body{margin:0}}</style></head><body>
-<h1>AGB &amp; Haftungsausschluss — Ötztaler Moped Marathon 2026</h1>
-<div class="meta">
-<strong>Teilnehmer:</strong> ' . esc_html($fullname) . ' (@' . esc_html($username) . ')<br>
-<strong>Veranstalter:</strong> Ötztaler Moped Verein, Sölden, Tirol<br>
-<strong>Unterzeichnet:</strong> ' . esc_html($signed_ts) . '
-</div>
-<p><strong>' . esc_html($fullname) . '</strong> erklärt seinen Beitritt zum Ötztaler Moped Verein als ordentliches Mitglied ohne Stimmrecht für die Dauer bis Ende September 2026.</p>
-<h2>Teilnahmebedingungen &amp; Haftungsausschluss</h2>
-<p>Die Teilnahme ist nur bei Volljährigkeit gestattet. Der Teilnehmer bestätigt ausdrücklich, dass für Verletzungen und Schäden jeglicher Art dem ÖMV keinerlei Schuld zuweisbar ist. Der Teilnehmer ist im Besitz einer gültigen Haftpflicht- und Unfallversicherung.</p>
-<div class="warn">⚠️ Der Teilnehmer bestätigt ausdrücklich, bei der verbindlichen Fahrerbesprechung persönlich anwesend zu sein.</div>
-<p>Der Teilnehmer verpflichtet sich, weder unter Alkohol- noch Drogeneinfluss zu fahren. Bei Verdacht ist der ÖMV berechtigt, den Teilnehmer ohne Rückerstattung auszuschließen.</p>
-<h2>Bild- &amp; Tonrechte</h2>
-<p>Der ÖMV ist berechtigt, Fotos, Videos und Audio-Aufnahmen des ÖMM für alle Zwecke in allen Medien weltweit zu verwenden.</p>
-<h2>Rückgaberecht &amp; Streitbeilegung</h2>
-<p>Rückgaberecht laut Fernabsatzgesetz: 14 Tage. Gerichtsstand: Innsbruck.</p>
-<div class="sig-box">
-<img src="' . esc_attr($sig_png) . '" alt="Unterschrift"><br>
-<small>Digitale Unterschrift von ' . esc_html($fullname) . '</small>
-</div>
-<div class="footer">Ötztaler Moped Verein — ÖMM XXVI 2026 | Elektronisch unterzeichnet: ' . esc_html($signed_ts) . '</div>
-</body></html>';
+function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png ) {
+    if ( ! class_exists('FPDF') ) {
+        require_once OEMM_XXVI_PATH . 'lib/fpdf.php';
+    }
+
+    $pdf = new FPDF('P', 'mm', 'A4');
+    $pdf->SetAutoPageBreak(true, 20);
+    $pdf->AddPage();
+    $pdf->SetMargins(20, 20, 20);
+
+    // Header
+    $pdf->SetFillColor(15, 52, 96);
+    $pdf->Rect(0, 0, 210, 28, 'F');
+    $pdf->SetTextColor(255, 255, 255);
+    $pdf->SetFont('Helvetica', 'B', 14);
+    $pdf->SetXY(20, 8);
+    $pdf->Cell(0, 8, iconv('UTF-8','ISO-8859-1','AGB & Haftungsausschluss'), 0, 1, 'L');
+    $pdf->SetFont('Helvetica', '', 9);
+    $pdf->SetX(20);
+    $pdf->Cell(0, 6, iconv('UTF-8','ISO-8859-1','Oetztaler Moped Marathon XXVI - 2026'), 0, 1, 'L');
+    $pdf->SetY(34);
+
+    // Meta-Box
+    $pdf->SetFillColor(245, 245, 245);
+    $pdf->SetTextColor(40, 40, 40);
+    $pdf->SetFont('Helvetica', '', 9);
+    $pdf->SetX(20);
+    $pdf->SetFillColor(235, 241, 250);
+    $pdf->Rect(20, 34, 170, 24, 'F');
+    $pdf->SetXY(24, 37);
+    $pdf->SetFont('Helvetica', 'B', 9);
+    $pdf->Cell(28, 5, 'Teilnehmer:', 0, 0);
+    $pdf->SetFont('Helvetica', '', 9);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1', $fullname . ' (@' . $username . ')'), 0, 1);
+    $pdf->SetX(24);
+    $pdf->SetFont('Helvetica', 'B', 9);
+    $pdf->Cell(28, 5, 'Veranstalter:', 0, 0);
+    $pdf->SetFont('Helvetica', '', 9);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1','Oetztaler Moped Verein, Soelden, Tirol'), 0, 1);
+    $pdf->SetX(24);
+    $pdf->SetFont('Helvetica', 'B', 9);
+    $pdf->Cell(28, 5, 'Unterzeichnet:', 0, 0);
+    $pdf->SetFont('Helvetica', '', 9);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1', $signed_ts), 0, 1);
+    $pdf->SetY(64);
+
+    // AGB Text
+    $pdf->SetTextColor(40, 40, 40);
+
+    $sections = [
+        'Allgemeine Geschaeftsbedingungen' => [
+            $fullname . ' erklaert seinen Beitritt zum Oetztaler Moped Verein als ordentliches Mitglied ohne Stimmrecht fuer die Dauer bis Ende September 2026.',
+            'Mit der Bezahlung des Mitgliedsbeitrags ist die Teilnahme an Veranstaltungen moeglich, allen voran der Oetztaler Mopedmarathon. Diese Ausflugsfahrt erfolgt nicht gewerblich und ist kein Rennen.',
+        ],
+        'Teilnahmebedingungen & Haftungsausschluss' => [
+            'Die Teilnahme ist nur bei Volljaehrigkeit gestattet.',
+            'Mir, dem Teilnehmer, ist bewusst, dass eine derartige Ausflugsfahrt mit gewissen Risiken behaftet ist. Ich bestatige ausdruecklich, dass fuer Verletzungen und Schaeden jeglicher Art dem OeMV keinerlei Schuld zuweisbar ist und ich den OeMV schad- und klaglos halte. Ich bin im Besitz einer gueltigen Haftpflicht- und Unfallversicherung.',
+            'Weiters verpflichte ich mich, mich an die Rundfahrt- und Sicherheitsvorschriften des OeMV zu halten.',
+            '!! ACHTUNG: Ich bestatige hiermit ausdruecklich, dass ich bei der verbindlichen Fahrerbesprechung des OeMV persoenlich anwesend sein werde.',
+            'Ich bestatige, dass meine Ausruestung keine Maengel aufweist. Bei augenscheinlichen Maengeln kann ich jederzeit von der Teilnahme ausgeschlossen werden.',
+        ],
+        'Bild- & Tonrechte' => [
+            'Der OeMV ist berechtigt, Fotos, Videos und Audio-Aufnahmen des OeMM fuer alle Zwecke in allen Medien weltweit zu verwenden. Der OeMV ist berechtigt, diese Rechte an Dritte zu uebertragen.',
+        ],
+        'Rueckgaberecht & Streitbeilegung' => [
+            'Rueckgaberecht laut Fernabsatzgesetz: 14 Tage ohne Angabe von Gruenden. Gerichtsstand: Innsbruck.',
+            'Gem. Par. 19 Abs 3 AStG: Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.',
+        ],
+    ];
+
+    foreach ( $sections as $title => $paragraphs ) {
+        $pdf->SetFont('Helvetica', 'B', 9);
+        $pdf->SetTextColor(15, 52, 96);
+        $pdf->SetX(20);
+        $pdf->Cell(0, 6, strtoupper($title), 0, 1);
+        $pdf->SetDrawColor(15, 52, 96);
+        $pdf->Line(20, $pdf->GetY(), 190, $pdf->GetY());
+        $pdf->Ln(2);
+        $pdf->SetFont('Helvetica', '', 9);
+        $pdf->SetTextColor(60, 60, 60);
+        foreach ( $paragraphs as $p ) {
+            $pdf->SetX(20);
+            $pdf->MultiCell(170, 5, $p, 0, 'L');
+            $pdf->Ln(1);
+        }
+        $pdf->Ln(3);
+    }
+
+    // Unterschrift
+    $pdf->SetFont('Helvetica', 'B', 9);
+    $pdf->SetTextColor(15, 52, 96);
+    $pdf->SetX(20);
+    $pdf->Cell(0, 6, 'DIGITALE UNTERSCHRIFT', 0, 1);
+    $pdf->SetDrawColor(15, 52, 96);
+    $pdf->Line(20, $pdf->GetY(), 190, $pdf->GetY());
+    $pdf->Ln(4);
+
+    // Sig PNG einbetten
+    if ( ! empty($sig_png) && strpos($sig_png, 'data:image/png;base64,') === 0 ) {
+        $b64  = substr($sig_png, strlen('data:image/png;base64,'));
+        $data = base64_decode($b64);
+        if ( $data ) {
+            $tmp = tempnam(sys_get_temp_dir(), 'sig_') . '.png';
+            file_put_contents($tmp, $data);
+            $sig_y = $pdf->GetY();
+            $pdf->Image($tmp, 45, $sig_y, 120, 35);
+            $pdf->SetY($sig_y + 38);
+            unlink($tmp);
+        }
+    }
+
+    // Signaturlinie
+    $pdf->SetDrawColor(180, 180, 180);
+    $pdf->Line(45, $pdf->GetY(), 165, $pdf->GetY());
+    $pdf->Ln(2);
+    $pdf->SetFont('Helvetica', '', 8);
+    $pdf->SetTextColor(120, 120, 120);
+    $pdf->SetX(45);
+    $pdf->Cell(120, 5, iconv('UTF-8','ISO-8859-1', 'Digitale Unterschrift: ' . $fullname . ' | ' . $signed_ts), 0, 1, 'C');
+
+    // Footer
+    $pdf->SetY(-20);
+    $pdf->SetFont('Helvetica', 'I', 7);
+    $pdf->SetTextColor(160, 160, 160);
+    $pdf->SetX(20);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1','Oetztaler Moped Verein - OeMM XXVI 2026 | Elektronisch unterzeichnet: ' . $signed_ts), 0, 0, 'C');
+
+    $pdf->Output('F', $filepath);
+}
+
+// RoundedRect Hilfsfunktion (FPDF Erweiterung)
+if ( ! function_exists('fpdf_rounded_rect_patched') ) {
+    // Inline-Patch fuer FPDF::RoundedRect falls nicht vorhanden
+    if ( class_exists('FPDF') && ! method_exists('FPDF', 'RoundedRect') ) {
+        class FPDF_OMM extends FPDF {
+            public function RoundedRect($x, $y, $w, $h, $r, $style='') {
+                $k=$this->k; $hp=$this->h;
+                if($style=='F') $op='f';
+                elseif($style=='FD'||$style=='DF') $op='B';
+                else $op='S';
+                $MyArc=4/3*(sqrt(2)-1);
+                $this->_out(sprintf('%.2F %.2F m',($x+$r)*$k,($hp-$y)*$k));
+                $xc=$x+$w-$r; $yc=$y+$r;
+                $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-$y)*$k));
+                $this->_Arc($xc,$yc,$r,90,0);
+                $xc=$x+$w-$r; $yc=$y+$h-$r;
+                $this->_out(sprintf('%.2F %.2F l',($x+$w)*$k,($hp-$yc)*$k));
+                $this->_Arc($xc,$yc,$r,0,-90);
+                $xc=$x+$r; $yc=$y+$h-$r;
+                $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-($y+$h))*$k));
+                $this->_Arc($xc,$yc,$r,-90,-180);
+                $xc=$x+$r; $yc=$y+$r;
+                $this->_out(sprintf('%.2F %.2F l',($x)*$k,($hp-$yc)*$k));
+                $this->_Arc($xc,$yc,$r,180,90);
+                $this->_out($op);
+            }
+            private function _Arc($x1,$y1,$r,$a1,$a2) {
+                $a1=deg2rad($a1); $a2=deg2rad($a2);
+                $b=$r*4/3*(1-cos(($a1-$a2)/2))/sin(($a1-$a2)/2);
+                $x2=$x1+$r*cos($a1); $y2=$y1-$r*sin($a1);
+                $x3=$x1+$r*cos($a2); $y3=$y1-$r*sin($a2);
+                $k=$this->k; $hp=$this->h;
+                $this->_out(sprintf('%.2F %.2F %.2F %.2F %.2F %.2F c',
+                    ($x2-$b*sin($a1))*$k, ($hp-($y2-$b*cos($a1)))*$k,
+                    ($x3+$b*sin($a2))*$k, ($hp-($y3+$b*cos($a2)))*$k,
+                    $x3*$k, ($hp-$y3)*$k));
+            }
+        }
+    }
+}
+
+/* ---------------------------------------------------------------
+   AVATAR UPLOAD
+--------------------------------------------------------------- */
+add_action( 'wp_ajax_oemm_upload_avatar', 'oemm_xxvi_upload_avatar' );
+function oemm_xxvi_upload_avatar() {
+    check_ajax_referer( 'oemm_avatar', 'nonce' );
+    if ( ! is_user_logged_in() ) wp_send_json_error();
+    if ( empty($_FILES['avatar']) ) wp_send_json_error(['msg'=>'Keine Datei']);
+
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+
+    $file = $_FILES['avatar'];
+    // Nur Bilder erlauben
+    $allowed = ['image/jpeg','image/png','image/gif','image/webp'];
+    if ( ! in_array($file['type'], $allowed) ) wp_send_json_error(['msg'=>'Nur Bilder erlaubt']);
+
+    $upload = wp_handle_upload($file, ['test_form'=>false]);
+    if ( isset($upload['error']) ) wp_send_json_error(['msg'=>$upload['error']]);
+
+    update_user_meta( get_current_user_id(), '_oemm_avatar_url', $upload['url'] );
+    wp_send_json_success(['url' => $upload['url']]);
 }
 
 /* ---------------------------------------------------------------
