@@ -157,26 +157,27 @@ h1,h2,h3,h4,h5 { font-family: 'Oswald', sans-serif; font-weight: 600; }
 .confirm-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 20px;
+  gap: 16px;
+  padding: 18px 20px;
   border-top: 1px solid rgba(255,255,255,0.06);
   cursor: pointer;
+  min-height: 60px;
 }
 .confirm-box {
-  width: 20px; height: 20px;
-  border-radius: 6px;
-  border: 2px solid rgba(255,255,255,0.18);
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.25);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  margin-top: 1px;
+  font-size: 18px;
+  margin-top: 2px;
   transition: all 0.15s;
 }
 .confirm-box.checked { background: #4ade80; border-color: #4ade80; color: #1a1a2e; }
-.confirm-text { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.5; }
-.confirm-text strong { color: rgba(255,255,255,0.8); }
+.confirm-text { font-size: 14px; color: rgba(255,255,255,0.65); line-height: 1.6; }
+.confirm-text strong { color: rgba(255,255,255,0.9); }
 
 .submit-btn {
   display: block;
@@ -330,7 +331,7 @@ h1,h2,h3,h4,h5 { font-family: 'Oswald', sans-serif; font-weight: 600; }
       </div>
     </div>
     <div style="padding:10px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
-      <span style="font-size:11px;color:rgba(255,255,255,0.25);text-transform:uppercase;letter-spacing:0.6px;">Vereinbarungsdatum:</span>
+      <span style="font-size:13px;color:#fff;font-weight:700;font-family:'Oswald',sans-serif;letter-spacing:0.5px;">Vereinbarungsdatum:</span>
       <span style="font-family:'Oswald',sans-serif;font-size:13px;color:#f0c040;font-weight:600;" id="omm-live-clock">—</span>
     </div>
 
