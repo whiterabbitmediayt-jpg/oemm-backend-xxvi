@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.7.0
+ * Version:     1.8.0
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.7.0' );
+define( 'OEMM_XXVI_VERSION', '1.8.0' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -362,26 +362,68 @@ function oemm_xxvi_download_handler() {
 }
 
 function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png ) {
+    // FPDF laden - echte PHP-Datei aus FPDF-master
     if ( ! class_exists('FPDF') ) {
         require_once OEMM_XXVI_PATH . 'lib/fpdf.php';
     }
 
     $pdf = new FPDF('P', 'mm', 'A4');
-    $pdf->SetAutoPageBreak(true, 20);
-    $pdf->AddPage();
+    $pdf->SetAutoPageBreak(true, 18);
     $pdf->SetMargins(20, 20, 20);
+    $pdf->AddPage();
 
-    // Header
+    // ========== HEADER BLOCK ==========
     $pdf->SetFillColor(15, 52, 96);
-    $pdf->Rect(0, 0, 210, 28, 'F');
+    $pdf->Rect(0, 0, 210, 36, 'F');
+
+    // Logo
+    $logo_path = OEMM_XXVI_PATH . 'assets/rocky-logo-pdf.png';
+    if ( file_exists($logo_path) ) {
+        $pdf->Image($logo_path, 14, 4, 28, 28);
+    }
+
+    // Titel neben Logo
     $pdf->SetTextColor(255, 255, 255);
-    $pdf->SetFont('Helvetica', 'B', 14);
-    $pdf->SetXY(20, 8);
-    $pdf->Cell(0, 8, iconv('UTF-8','ISO-8859-1','AGB & Haftungsausschluss'), 0, 1, 'L');
-    $pdf->SetFont('Helvetica', '', 9);
-    $pdf->SetX(20);
-    $pdf->Cell(0, 6, iconv('UTF-8','ISO-8859-1','Oetztaler Moped Marathon XXVI - 2026'), 0, 1, 'L');
-    $pdf->SetY(34);
+    $pdf->SetFont('Helvetica', 'B', 15);
+    $pdf->SetXY(46, 7);
+    $pdf->Cell(0, 8, iconv('UTF-8','ISO-8859-1','OTZTALER MOPED VEREIN'), 0, 1, 'L');
+    $pdf->SetFont('Helvetica', '', 8);
+    $pdf->SetTextColor(200, 215, 240);
+    $pdf->SetX(46);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1','AGB & Haftungsausschluss - Oetztaler Moped Marathon XXVI / 2026'), 0, 1, 'L');
+    $pdf->SetX(46);
+    $pdf->SetTextColor(240, 192, 64);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1','mopedmarathon.at'), 0, 1, 'L');
+
+    $pdf->SetY(42);
+
+    // ========== META BOX ==========
+    $pdf->SetFillColor(235, 241, 250);
+    $pdf->SetDrawColor(200, 215, 240);
+    $pdf->Rect(20, 42, 170, 26, 'FD');
+    $pdf->SetXY(25, 45);
+    $pdf->SetTextColor(15, 52, 96);
+    $pdf->SetFont('Helvetica', 'B', 8);
+    $pdf->Cell(32, 5, 'Teilnehmer:', 0, 0);
+    $pdf->SetFont('Helvetica', '', 8);
+    $pdf->SetTextColor(40, 40, 40);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1', $fullname . '  (@' . $username . ')'), 0, 1);
+    $pdf->SetX(25);
+    $pdf->SetFont('Helvetica', 'B', 8);
+    $pdf->SetTextColor(15, 52, 96);
+    $pdf->Cell(32, 5, 'Veranstalter:', 0, 0);
+    $pdf->SetFont('Helvetica', '', 8);
+    $pdf->SetTextColor(40, 40, 40);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1','Oetztaler Moped Verein, Soelden, Tirol'), 0, 1);
+    $pdf->SetX(25);
+    $pdf->SetFont('Helvetica', 'B', 8);
+    $pdf->SetTextColor(15, 52, 96);
+    $pdf->Cell(32, 5, 'Unterzeichnet am:', 0, 0);
+    $pdf->SetFont('Helvetica', '', 8);
+    $pdf->SetTextColor(40, 40, 40);
+    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1', $signed_ts), 0, 1);
+
+    $pdf->SetY(74);
 
     // Meta-Box
     $pdf->SetFillColor(245, 245, 245);
@@ -410,24 +452,40 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     // AGB Text
     $pdf->SetTextColor(40, 40, 40);
 
+    // Vollstaendiger HA-Text (ISO-8859-1 kompatibel - keine Umlaute im Quellcode)
+    $fn = iconv('UTF-8','ISO-8859-1//TRANSLIT', $fullname);
     $sections = [
-        'Allgemeine Geschaeftsbedingungen' => [
-            $fullname . ' erklaert seinen Beitritt zum Oetztaler Moped Verein als ordentliches Mitglied ohne Stimmrecht fuer die Dauer bis Ende September 2026.',
-            'Mit der Bezahlung des Mitgliedsbeitrags ist die Teilnahme an Veranstaltungen moeglich, allen voran der Oetztaler Mopedmarathon. Diese Ausflugsfahrt erfolgt nicht gewerblich und ist kein Rennen.',
+        'ALLGEMEINE GESCHAFTSBEDINGUNGEN' => [
+            $fn . ' erklaert seinen Beitritt zum Oetztaler Moped Verein (OeMV) als ordentliches Mitglied ohne Stimmrecht fuer die Dauer bis Ende September 2026.',
+            'Mit der Bezahlung des Mitgliedsbeitrags ist dem Mitglied die Teilnahme an Veranstaltungen des OeMV moeglich, allen voran der Oetztaler Mopedmarathon (OeMM). Diese Ausflugsfahrt erfolgt nicht gewerblich und ist kein Rennen.',
+            'Der OeMV kann Vorschriften fuer das Verhalten auf der Veranstaltung erlassen und diese nach eigenem Ermessen anpassen.',
+            'Zahlungen werden ausschliesslich per Online-Zahlung abgewickelt. Der Mitgliedsbeitrag beinhaltet die Startgebuer fuer den OeMM sowie die Aufnahmegebuer.',
         ],
-        'Teilnahmebedingungen & Haftungsausschluss' => [
-            'Die Teilnahme ist nur bei Volljaehrigkeit gestattet.',
-            'Mir, dem Teilnehmer, ist bewusst, dass eine derartige Ausflugsfahrt mit gewissen Risiken behaftet ist. Ich bestatige ausdruecklich, dass fuer Verletzungen und Schaeden jeglicher Art dem OeMV keinerlei Schuld zuweisbar ist und ich den OeMV schad- und klaglos halte. Ich bin im Besitz einer gueltigen Haftpflicht- und Unfallversicherung.',
-            'Weiters verpflichte ich mich, mich an die Rundfahrt- und Sicherheitsvorschriften des OeMV zu halten.',
-            '!! ACHTUNG: Ich bestatige hiermit ausdruecklich, dass ich bei der verbindlichen Fahrerbesprechung des OeMV persoenlich anwesend sein werde.',
-            'Ich bestatige, dass meine Ausruestung keine Maengel aufweist. Bei augenscheinlichen Maengeln kann ich jederzeit von der Teilnahme ausgeschlossen werden.',
+        'TEILNAHMEBEDINGUNGEN & HAFTUNGSAUSSCHLUSS' => [
+            'Die Teilnahme am OeMM ist nur bei Volljaehrigkeit des Teilnehmers gestattet.',
+            'Mir, dem Teilnehmer, ist bewusst, dass eine derartige Ausflugsfahrt mit gewissen Risiken behaftet ist. Ich bestatige ausdruecklich, dass fuer Verletzungen und Schaeden jeglicher Art (an Personen, Fahrzeugen oder sonstigen Gegenstanden) dem OeMV und seinen Funktionaeren keinerlei Schuld zuweisbar ist, und ich den OeMV und seine Funktionaere schad- und klaglos halte. Ich bin im Besitz einer gueltigen Haftpflicht- und Unfallversicherung.',
+            'Weiters verpflichte ich mich, mich an alle Rundfahrt- und Sicherheitsvorschriften des OeMV zu halten und die Weisungen der Streckenposten und Funktionaere zu befolgen.',
+            '!! ACHTUNG: Ich bestatige hiermit ausdruecklich, dass ich bei der verbindlichen Fahrerbesprechung des OeMV persoenlich anwesend sein werde. Bei Nichterscheinen erlischt mein Startrecht ohne Anspruch auf Rueckerstattung.',
+            'Ich bestatige, dass mein Fahrzeug und meine Ausruestung keine Maengel aufweisen und dem Stand der Technik entsprechen. Bei augenscheinlichen Maengeln kann ich jederzeit ohne Rueckerstattung von der Teilnahme ausgeschlossen werden.',
+            'Die Teilnahme unter Alkohol- oder Drogeneinfluss ist streng untersagt. Bei begruendetem Verdacht ist der OeMV berechtigt, den Teilnehmer sofort und ohne Rueckerstattung auszuschliessen.',
         ],
-        'Bild- & Tonrechte' => [
-            'Der OeMV ist berechtigt, Fotos, Videos und Audio-Aufnahmen des OeMM fuer alle Zwecke in allen Medien weltweit zu verwenden. Der OeMV ist berechtigt, diese Rechte an Dritte zu uebertragen.',
+        'BILD- & TONRECHTE' => [
+            'Der OeMV ist berechtigt, Fotos, Videos, Tonaufnahmen und sonstige Medieninhalte des OeMM und seiner Teilnehmer fuer alle Zwecke (Werbung, Presse, Social Media, Dokumentation) in allen Medien weltweit unentgeltlich zu verwenden und zu veroeffentlichen.',
+            'Der OeMV ist berechtigt, diese Rechte an Dritte (z.B. Medienpartner, Sponsoren) zu uebertragen. Eine gesonderte Verguetung oder Zustimmung des Teilnehmers ist nicht erforderlich.',
         ],
-        'Rueckgaberecht & Streitbeilegung' => [
-            'Rueckgaberecht laut Fernabsatzgesetz: 14 Tage ohne Angabe von Gruenden. Gerichtsstand: Innsbruck.',
-            'Gem. Par. 19 Abs 3 AStG: Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.',
+        'DATENSCHUTZ' => [
+            'Die erhobenen Mitgliedsdaten werden ausschliesslich fuer die Verwaltung der Veranstaltung und die Mitgliedschaft im OeMV verwendet. Eine Weitergabe an Dritte erfolgt nicht, soweit dies nicht zur Durchfuehrung des Events erforderlich ist.',
+            'Informationen gemaess DSGVO: Der Teilnehmer hat das Recht auf Auskunft, Berichtigung und Loeschung seiner Daten. Kontakt: info@mopedmarathon.at',
+        ],
+        'RUECKTRITT & STORNIERUNG' => [
+            'Bei Ruecktritt bis 4 Wochen vor Veranstaltungsbeginn: Rueckerstattung des Mitgliedsbeitrags abzueglich einer Bearbeitungsgebuer von EUR 25,--.',
+            'Bei Ruecktritt weniger als 4 Wochen vor Veranstaltungsbeginn: kein Anspruch auf Rueckerstattung. Eine Uebertragung des Startplatzes auf eine andere Person ist nach Absprache mit dem OeMV moeglich.',
+            'Rrueckgaberecht laut Fernabsatzgesetz: 14 Tage ohne Angabe von Gruenden ab Vertragsabschluss (gilt nicht, wenn der Service-Zeitraum bereits begonnen hat).',
+        ],
+        'SONSTIGES & GERICHTSSTAND' => [
+            'Diese Vereinbarung unterliegt oesterreichischem Recht. Gerichtsstand ist Innsbruck.',
+            'Gemaess Par. 19 Abs. 3 AStG: Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.',
+            'Sollten einzelne Bestimmungen dieser Vereinbarung unwirksam sein, bleibt die Wirksamkeit der uebrigen Bestimmungen davon unberuehrt.',
         ],
     ];
 
@@ -449,44 +507,60 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
         $pdf->Ln(3);
     }
 
-    // Unterschrift
+    // ========== UNTERSCHRIFT SEKTION ==========
+    $pdf->Ln(4);
     $pdf->SetFont('Helvetica', 'B', 9);
     $pdf->SetTextColor(15, 52, 96);
     $pdf->SetX(20);
-    $pdf->Cell(0, 6, 'DIGITALE UNTERSCHRIFT', 0, 1);
+    $pdf->Cell(0, 6, 'DIGITALE UNTERSCHRIFT DES TEILNEHMERS', 0, 1);
     $pdf->SetDrawColor(15, 52, 96);
+    $pdf->SetLineWidth(0.5);
     $pdf->Line(20, $pdf->GetY(), 190, $pdf->GetY());
-    $pdf->Ln(4);
+    $pdf->SetLineWidth(0.2);
+    $pdf->Ln(5);
+
+    // Unterschriften-Box
+    $sig_box_y = $pdf->GetY();
+    $pdf->SetFillColor(252, 252, 255);
+    $pdf->SetDrawColor(200, 215, 240);
+    $pdf->Rect(30, $sig_box_y, 150, 45, 'FD');
 
     // Sig PNG einbetten
     if ( ! empty($sig_png) && strpos($sig_png, 'data:image/png;base64,') === 0 ) {
         $b64  = substr($sig_png, strlen('data:image/png;base64,'));
         $data = base64_decode($b64);
         if ( $data ) {
-            $tmp = tempnam(sys_get_temp_dir(), 'sig_') . '.png';
+            $tmp = tempnam(sys_get_temp_dir(), 'oemm_sig_') . '.png';
             file_put_contents($tmp, $data);
-            $sig_y = $pdf->GetY();
-            $pdf->Image($tmp, 45, $sig_y, 120, 35);
-            $pdf->SetY($sig_y + 38);
+            if ( filesize($tmp) > 100 ) {
+                $pdf->Image($tmp, 35, $sig_box_y + 3, 140, 36);
+            }
             unlink($tmp);
         }
     }
 
-    // Signaturlinie
+    $pdf->SetY($sig_box_y + 47);
     $pdf->SetDrawColor(180, 180, 180);
-    $pdf->Line(45, $pdf->GetY(), 165, $pdf->GetY());
-    $pdf->Ln(2);
+    $pdf->Line(30, $pdf->GetY(), 180, $pdf->GetY());
+    $pdf->Ln(3);
     $pdf->SetFont('Helvetica', '', 8);
-    $pdf->SetTextColor(120, 120, 120);
-    $pdf->SetX(45);
-    $pdf->Cell(120, 5, iconv('UTF-8','ISO-8859-1', 'Digitale Unterschrift: ' . $fullname . ' | ' . $signed_ts), 0, 1, 'C');
-
-    // Footer
-    $pdf->SetY(-20);
+    $pdf->SetTextColor(100, 100, 100);
+    $pdf->SetX(30);
+    $pdf->Cell(150, 5, iconv('UTF-8','ISO-8859-1//TRANSLIT', $fullname . '  |  ' . $signed_ts), 0, 1, 'C');
+    $pdf->SetX(30);
     $pdf->SetFont('Helvetica', 'I', 7);
-    $pdf->SetTextColor(160, 160, 160);
+    $pdf->SetTextColor(140, 140, 140);
+    $pdf->Cell(150, 5, 'Rechtsverbindliche digitale Unterschrift gemaess EU-Verordnung 910/2014 (eIDAS)', 0, 1, 'C');
+
+    // ========== FOOTER ==========
+    $pdf->SetY(-18);
+    $pdf->SetFillColor(15, 52, 96);
+    $pdf->Rect(0, $pdf->GetY(), 210, 18, 'F');
+    $pdf->SetFont('Helvetica', '', 7);
+    $pdf->SetTextColor(180, 200, 230);
     $pdf->SetX(20);
-    $pdf->Cell(0, 5, iconv('UTF-8','ISO-8859-1','Oetztaler Moped Verein - OeMM XXVI 2026 | Elektronisch unterzeichnet: ' . $signed_ts), 0, 0, 'C');
+    $pdf->Cell(0, 9, iconv('UTF-8','ISO-8859-1//TRANSLIT',
+        'Oetztaler Moped Verein - OeMM XXVI 2026  |  mopedmarathon.at  |  Elektronisch unterzeichnet: ' . $signed_ts), 0, 0, 'C');
 
     $pdf->Output('F', $filepath);
 }
