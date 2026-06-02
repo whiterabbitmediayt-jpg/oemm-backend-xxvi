@@ -12,19 +12,19 @@ $initials = strtoupper( substr( $fullname, 0, 1 ) );
 .gate-logo img{width:64px;filter:brightness(0) invert(1);opacity:.9}
 .gate-logo .brand{font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:2px;margin-top:6px}
 .gate-title{font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;color:#fff;margin-bottom:4px}
-.gate-subtitle{font-size:13px;color:rgba(255,255,255,.35);margin-bottom:20px}
+.gate-subtitle{font-size:13px;color:rgba(255,255,255,.65);margin-bottom:20px}
 .doc-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;margin-bottom:16px;overflow:hidden}
 .doc-body{padding:22px 24px;font-size:13px;color:rgba(255,255,255,.85);line-height:1.75}
 .doc-body h4{font-family:'Oswald',sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.7);margin:16px 0 5px}
 .doc-body h4:first-child{margin-top:0}
-.doc-body p{margin:0 0 8px;color:rgba(255,255,255,.82)}
+.doc-body p{margin:0 0 8px;color:rgba(255,255,255,.88)}
 .sig-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;margin-bottom:16px;overflow:hidden}
 .sig-header{padding:14px 20px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
 .sig-header h3{font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;color:rgba(255,255,255,.8);margin:0 0 2px}
 .sig-header p{font-size:12px;color:rgba(255,255,255,.3);margin:0}
 .sig-canvas-wrap{position:relative;background:#fff}
 #omm-sig-canvas{display:block;width:100%;height:160px;cursor:crosshair;touch-action:none;background:#fff}
-.sig-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:rgba(255,255,255,.12);pointer-events:none;font-style:italic;transition:opacity .3s}
+.sig-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;transition:opacity .3s}
 .sig-line{position:absolute;bottom:32px;left:5%;right:5%;height:1px;background:rgba(255,255,255,.08);pointer-events:none}
 .sig-actions{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid rgba(255,255,255,.06)}
 .sig-clear{background:none;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.35);font-family:'Oswald',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s}
@@ -118,7 +118,7 @@ $initials = strtoupper( substr( $fullname, 0, 1 ) );
 
     <div class="sig-canvas-wrap">
       <canvas id="omm-sig-canvas"></canvas>
-      <div class="sig-placeholder" id="omm-sig-placeholder">✍️ Hier unterschreiben</div>
+      <div class="sig-placeholder" id="omm-sig-placeholder"><span style="font-size:42px;line-height:1">✍️</span><span style="font-size:13px;color:rgba(0,0,0,.35);font-style:italic">Hier unterschreiben</span></div>
       <div class="sig-line"></div>
     </div>
     <div class="sig-actions">
