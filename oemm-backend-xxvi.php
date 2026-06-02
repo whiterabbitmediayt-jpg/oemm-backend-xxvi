@@ -225,6 +225,26 @@ function oemm_xxvi_login_redirect( $redirect, $user ) {
     return wc_get_account_endpoint_url( 'omm-dashboard' );
 }
 
+// /my-account/ direkt → omm-dashboard weiterleiten (kein Standard-Dashboard)
+add_action( 'template_redirect', 'oemm_xxvi_redirect_dashboard', 4 );
+function oemm_xxvi_redirect_dashboard() {
+    if ( ! is_user_logged_in() ) return;
+    if ( is_admin() ) return;
+    $user = wp_get_current_user();
+    if ( oemm_xxvi_is_admin_user( $user ) ) return;
+
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    // Nur auf exaktem /my-account/ (ohne Endpoint)
+    if ( is_account_page() && ! is_wc_endpoint_url() ) {
+        if ( ! oemm_xxvi_has_signed( $user->ID ) ) {
+            wp_safe_redirect( wc_get_account_endpoint_url( 'haftungsausschluss' ) );
+        } else {
+            wp_safe_redirect( wc_get_account_endpoint_url( 'omm-dashboard' ) );
+        }
+        exit;
+    }
+}
+
 /* ---------------------------------------------------------------
    REST API
 --------------------------------------------------------------- */
