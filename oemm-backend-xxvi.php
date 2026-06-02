@@ -400,11 +400,12 @@ function oemm_xxvi_page_title( $title, $id ) {
     return $title;
 }
 
-// Extra: Sicherheitsnetz falls WC beim Aktivieren noch nicht bereit war
+// Sicherheitsnetz: Endpoints + Flush bei jedem WC-Init bis Rewrite Rules stimmen
 add_action( 'woocommerce_init', function() {
-    if ( get_option('oemm_xxvi_needs_flush') ) {
+    $flushed = get_option( 'oemm_xxvi_flushed_v', '0' );
+    if ( $flushed !== OEMM_XXVI_VERSION ) {
         oemm_xxvi_add_endpoints();
-        flush_rewrite_rules();
-        delete_option('oemm_xxvi_needs_flush');
+        flush_rewrite_rules( true );
+        update_option( 'oemm_xxvi_flushed_v', OEMM_XXVI_VERSION );
     }
 }, 20 );
