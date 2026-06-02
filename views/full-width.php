@@ -13,30 +13,41 @@ defined( 'ABSPATH' ) || exit;
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <?php wp_head(); ?>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 /* ÖMM Full-Width Override */
-body { background: #1a1a2e !important; }
-.oemm-fw-wrap { min-height: 100vh; background: #1a1a2e; }
-/* Theme-spezifische Wrapper verstecken */
-.site-main, .entry-content, .woocommerce, .woocommerce-page,
-main#main, #primary, .content-area { 
-    background: transparent !important;
+html, body { background: #1a1a2e !important; margin: 0; padding: 0; }
+* { box-sizing: border-box; }
+.oemm-fw-page { min-height: 100vh; background: #1a1a2e; font-family: 'Inter', system-ui, sans-serif; }
+
+/* ALLES vom Theme ausblenden */
+#masthead, .site-header, header.site-header,
+.site-footer, footer.site-footer, #colophon,
+.woocommerce-breadcrumb, .woocommerce-MyAccount-navigation,
+.wc-shortcodes-clearfix, .woocommerce-notices-wrapper,
+#page, .site, .site-content, #primary, #secondary,
+.entry-header, .entry-footer, .page-header,
+.main-navigation, nav.navigation, .nav-menu,
+.woocommerce-account .woocommerce,
+.woocommerce-account .woocommerce-MyAccount-content { 
+    display: none !important;
+}
+/* Wrapper transparent */
+.site-main, main#main, #content, .content-area,
+.woocommerce-page, .woocommerce {
     padding: 0 !important;
     margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
     max-width: 100% !important;
+    width: 100% !important;
 }
-/* Header bleibt sichtbar */
-#masthead, .site-header, header.site-header { 
-    position: relative; 
-    z-index: 100;
-}
+body.oemm-account-page { padding-top: 0 !important; }
 </style>
 </head>
 <body <?php body_class('oemm-account-page'); ?>>
 <?php wp_body_open(); ?>
 
-<?php get_header(); ?>
-
-<div class="oemm-fw-wrap">
+<div class="oemm-fw-page">
   <div style="max-width:1100px;margin:0 auto;padding:32px 20px 60px;display:grid;grid-template-columns:220px 1fr;gap:28px;align-items:start">
 
     <!-- SIDEBAR NAVIGATION -->
@@ -118,7 +129,6 @@ main#main, #primary, .content-area {
   </div>
 </div>
 
-<?php get_footer(); ?>
 <?php wp_footer(); ?>
 </body>
 </html>
