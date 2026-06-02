@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.3.1
+ * Version:     1.4.0
  * Author:      Ötztaler Moped Verein
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.3.1' );
+define( 'OEMM_XXVI_VERSION', '1.4.0' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -407,7 +407,12 @@ function oemm_xxvi_full_width_template( $template ) {
     if ( oemm_xxvi_is_admin_user( $user ) ) return $template;
 
     $uri = $_SERVER['REQUEST_URI'] ?? '';
-    $oemm_pages = [ 'omm-dashboard', 'omm-bestellungen', 'omm-downloads', 'omm-adresse', 'omm-kontodetails', 'haftungsausschluss' ];
+    // Haftungsausschluss: eigenes Standalone-Template (komplettes HTML, keine Sidebar)
+    if ( strpos( $uri, 'haftungsausschluss' ) !== false ) {
+        return OEMM_XXVI_PATH . 'views/ha-standalone.php';
+    }
+    // Alle anderen ÖMM-Seiten: Dashboard-Layout mit Sidebar
+    $oemm_pages = [ 'omm-dashboard', 'omm-bestellungen', 'omm-downloads', 'omm-adresse', 'omm-kontodetails' ];
     foreach ( $oemm_pages as $page ) {
         if ( strpos( $uri, $page ) !== false ) {
             return OEMM_XXVI_PATH . 'views/full-width.php';
