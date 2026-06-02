@@ -108,19 +108,21 @@ body.oemm-account-page { padding-top:0!important; }
 }
 .oemm-avatar-wrap { position: relative; flex-shrink: 0; }
 .oemm-avatar-img {
-  width: 86px; height: 86px;
+  width: 110px; height: 110px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid rgba(255,255,255,.2);
+  border: 3px solid rgba(255,255,255,.22);
+  box-shadow: 0 4px 20px rgba(0,0,0,.35);
 }
 .oemm-avatar-circle {
-  width: 86px; height: 86px;
+  width: 110px; height: 110px;
   border-radius: 50%;
   background: linear-gradient(135deg,#2563eb,#1e40af);
   display: flex; align-items: center; justify-content: center;
   font-family: 'Oswald',sans-serif;
-  font-size: 36px; font-weight: 700; color: #fff;
+  font-size: 44px; font-weight: 700; color: #fff;
   border: 3px solid rgba(255,255,255,.18);
+  box-shadow: 0 4px 20px rgba(0,0,0,.35);
 }
 .oemm-avatar-edit {
   position: absolute; bottom: 0; right: 0;

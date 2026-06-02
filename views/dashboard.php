@@ -189,6 +189,18 @@ function oemm_status_badge( $status ) {
     .order-date { display: none; }
     .countdown-grid { gap: 10px !important; }
     .two-col-grid { grid-template-columns: 1fr !important; }
+    /* Ticket Mobile */
+    .oemm-ticket-inner { flex-direction: column !important; }
+    .oemm-ticket-left {
+      padding-right: 0 !important; border-right: none !important;
+      margin-right: 0 !important; border-right: none !important;
+      padding-bottom: 14px !important;
+      border-bottom: 2px dashed rgba(255,255,255,.12) !important;
+      margin-bottom: 14px !important;
+      flex-direction: row !important;
+      align-items: center !important; gap: 16px !important;
+      justify-content: center !important;
+    }
   }
 </style>
 
@@ -206,27 +218,39 @@ function oemm_status_badge( $status ) {
 </div>
 <?php endif; ?>
 
-<!-- OEMM KARTE -->
-<div class="oemm-card">
-  <div class="oemm-card-header">
-    <span style="font-size:20px">🏍</span>
-    <h3>Ötztaler Moped Marathon 2026</h3>
-    <span class="badge badge-gold" style="margin-left:auto">2026</span>
-  </div>
-  <div class="oemm-card-body">
-    <?php if ( $startnumber !== '—' ) : ?>
-    <div class="oemm-startnumber">
-      <span class="oemm-sn-label">Startnummer</span>
-      <span class="oemm-sn-number"><?php echo esc_html($startnumber); ?></span>
+<!-- TICKET CARD -->
+<div style="background:linear-gradient(135deg,#0f3460 0%,#1a1a2e 40%,#0d1b3e 100%);border:1px solid rgba(240,192,64,.25);border-radius:20px;overflow:hidden;margin-bottom:18px;box-shadow:0 12px 40px rgba(0,0,0,.45);position:relative;">
+  <div style="height:4px;background:repeating-linear-gradient(90deg,#f0c040 0,#f0c040 12px,transparent 12px,transparent 20px);"></div>
+  <div class="oemm-ticket-inner" style="padding:24px 28px;display:flex;align-items:stretch;gap:0;">
+    <!-- Startnummer links -->
+    <div class="oemm-ticket-left" style="flex-shrink:0;padding-right:24px;border-right:2px dashed rgba(255,255,255,.12);margin-right:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:110px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.35);margin-bottom:2px;">Startnummer</div>
+      <?php if ( $startnumber !== '—' ) : ?>
+      <div style="font-family:'Oswald',sans-serif;font-size:82px;font-weight:700;color:#f0c040;line-height:.9;text-shadow:0 4px 30px rgba(240,192,64,.4);letter-spacing:-3px;"><?php echo esc_html($startnumber); ?></div>
+      <?php else : ?>
+      <div style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:rgba(255,255,255,.2);">TBA</div>
+      <?php endif; ?>
+      <div style="margin-top:8px;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.3);border-radius:20px;padding:2px 10px;font-family:'Oswald',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:#f0c040;">ÖMM 2026</div>
     </div>
-    <div class="oemm-vdivider"></div>
-    <?php endif; ?>
-    <div class="oemm-info">
-      <h4>Du bist dabei!</h4>
-      <p>26. - 27. Juni 2026 — Sölden, Tirol<br>Deine Anmeldung ist bestätigt.</p>
-      <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;background:#f0c040;color:#1a1a2e;font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;padding:11px 24px;border-radius:10px;text-decoration:none;">⬇ Downloads</a>
+    <!-- Event-Info rechts -->
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-family:'Oswald',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,.3);margin-bottom:5px;">Dein Start-Ticket</div>
+        <h2 style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:#fff;margin:0 0 8px;line-height:1.15;">ÖTZTALER<br>MOPEDMARATHON XXVI</h2>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.8;">
+          <span>📅</span> 26. - 27. Juni 2026
+          &nbsp;<span style="opacity:.3">|</span>&nbsp;
+          <span>📍</span> Sölden, Tirol<br>
+          <span>👤</span> <?php echo esc_html($fullname); ?>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="https://app.mopedmarathon.at" target="_blank" style="display:inline-flex;align-items:center;gap:7px;background:#f0c040;color:#1a1a2e;font-family:'Oswald',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:9px 18px;border-radius:10px;text-decoration:none;box-shadow:0 4px 14px rgba(240,192,64,.3);">🏍 Zur ÖMM App</a>
+        <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.15);font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:9px 18px;border-radius:10px;text-decoration:none;">⬇ Downloads</a>
+      </div>
     </div>
   </div>
+  <div style="height:4px;background:repeating-linear-gradient(90deg,#f0c040 0,#f0c040 12px,transparent 12px,transparent 20px);"></div>
 </div>
 
 <!-- QUICK CARDS -->

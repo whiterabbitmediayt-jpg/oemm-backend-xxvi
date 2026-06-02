@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.9.1
+ * Version:     1.9.2
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.9.1' );
+define( 'OEMM_XXVI_VERSION', '1.9.2' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -386,10 +386,33 @@ function oemm_xxvi_download_handler() {
     $expected = hash( 'sha256', AUTH_KEY . $user_id . basename( $filepath ) );
 
     if ( ! hash_equals( $expected, $token ) ) wp_die( 'Ungültiger Token.' );
-    if ( ! file_exists( $filepath ) )         wp_die( 'Datei nicht gefunden.' );
 
-    // Alle bisherigen Ausgaben verwerfen (WordPress-Headers, Cookies, etc.)
-    if ( ob_get_level() ) ob_end_clean();
+    // Auto-Regenerierung: falls Datei fehlt ODER noch .html (alte Version)
+    if ( ! file_exists( $filepath ) || substr( $filepath, -5 ) === '.html' || filesize( $filepath ) < 500 ) {
+        $u         = get_user_by( 'id', $user_id );
+        $fullname  = trim( $u->first_name . ' ' . $u->last_name ) ?: $u->display_name;
+        $username  = $u->user_login;
+        $signed_ts = get_user_meta( $user_id, '_oemm_ha_signed_ts', true ) ?: date('d.m.Y H:i:s');
+        $sig_png   = get_user_meta( $user_id, '_oemm_ha_sig_png',  true ) ?: '';
+        $upload    = wp_upload_dir();
+        $dir       = trailingslashit( $upload['basedir'] ) . 'oemm-agreements/';
+        wp_mkdir_p( $dir );
+        $filepath  = $dir . 'ha-' . $user_id . '.pdf';
+        oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png );
+        // Update DL-Link und File-Path
+        $filename = basename( $filepath );
+        $dl_url = add_query_arg( [
+            'oemm_dl' => 1, 'uid' => $user_id,
+            'token'   => hash( 'sha256', AUTH_KEY . $user_id . $filename ),
+        ], home_url( '/' ) );
+        update_user_meta( $user_id, '_oemm_ha_dl_file', $filepath );
+        update_user_meta( $user_id, '_oemm_ha_dl_url',  $dl_url );
+    }
+
+    if ( ! file_exists( $filepath ) ) wp_die( 'PDF konnte nicht erstellt werden.' );
+
+    // WP-Ausgabe vollstaendig verwerfen
+    while ( ob_get_level() ) ob_end_clean();
 
     header( 'Content-Type: application/pdf' );
     header( 'Content-Disposition: attachment; filename="Haftungsausschluss_OeMM_2026.pdf"' );
