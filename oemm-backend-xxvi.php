@@ -11,6 +11,60 @@
 defined( 'ABSPATH' ) || exit;
 
 define( 'OEMM_XXVI_VERSION', '1.0.0' );
+define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
+define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
+
+/* ---------------------------------------------------------------
+   GITHUB AUTO-UPDATER
+--------------------------------------------------------------- */
+add_filter( 'pre_set_site_transient_update_plugins', 'oemm_xxvi_check_update' );
+function oemm_xxvi_check_update( $transient ) {
+    if ( empty( $transient->checked ) ) return $transient;
+
+    $remote = get_transient( 'oemm_xxvi_github_release' );
+    if ( false === $remote ) {
+        $response = wp_remote_get(
+            'https://api.github.com/repos/' . OEMM_XXVI_GITHUB_REPO . '/releases/latest',
+            [ 'headers' => [ 'User-Agent' => 'WordPress/' . get_bloginfo('version') ], 'timeout' => 10 ]
+        );
+        if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) return $transient;
+        $remote = json_decode( wp_remote_retrieve_body( $response ) );
+        set_transient( 'oemm_xxvi_github_release', $remote, HOUR_IN_SECONDS * 6 );
+    }
+
+    if ( ! $remote || empty( $remote->tag_name ) ) return $transient;
+
+    $latest = ltrim( $remote->tag_name, 'v' );
+    if ( version_compare( OEMM_XXVI_VERSION, $latest, '<' ) ) {
+        $zip_url = 'https://github.com/' . OEMM_XXVI_GITHUB_REPO . '/archive/refs/heads/main.zip';
+        $transient->response[ OEMM_XXVI_PLUGIN_SLUG ] = (object) [
+            'slug'        => 'oemm-backend-xxvi',
+            'plugin'      => OEMM_XXVI_PLUGIN_SLUG,
+            'new_version' => $latest,
+            'url'         => 'https://github.com/' . OEMM_XXVI_GITHUB_REPO,
+            'package'     => $zip_url,
+        ];
+    }
+    return $transient;
+}
+
+// Nach Update: Plugin-Ordner korrekt umbenennen
+add_filter( 'upgrader_source_selection', 'oemm_xxvi_fix_update_folder', 10, 4 );
+function oemm_xxvi_fix_update_folder( $source, $remote_source, $upgrader, $args ) {
+    if ( ! isset( $args['plugin'] ) || $args['plugin'] !== OEMM_XXVI_PLUGIN_SLUG ) return $source;
+    global $wp_filesystem;
+    $new = trailingslashit( $remote_source ) . 'oemm-backend-xxvi/';
+    if ( $source !== $new ) {
+        $wp_filesystem->move( $source, $new );
+        return $new;
+    }
+    return $source;
+}
+
+// Update-Cache leeren wenn Plugin gespeichert wird
+add_action( 'upgrader_process_complete', function() {
+    delete_transient( 'oemm_xxvi_github_release' );
+}, 10, 0 );
 define( 'OEMM_XXVI_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'OEMM_XXVI_URL',     plugin_dir_url( __FILE__ ) );
 define( 'OEMM_XXVI_TABLE',   'oemm_xxvi_agreements' );
