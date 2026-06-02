@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.9.3
+ * Version:     1.9.4
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.9.3' );
+define( 'OEMM_XXVI_VERSION', '1.9.4' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -707,9 +707,85 @@ function oemm_xxvi_admin_regen_pdf() {
 }
 
 /* ---------------------------------------------------------------
-   ADMIN DIAGNOSE
-   Aufruf: /wp-admin/?oemm_diagnose=1
+   ADMIN MENU + DIAGNOSE
 --------------------------------------------------------------- */
+add_action( 'admin_menu', 'oemm_xxvi_admin_menu' );
+function oemm_xxvi_admin_menu() {
+    add_menu_page(
+        'OeMM Backend',
+        'OeMM XXVI',
+        'manage_options',
+        'oemm-xxvi-admin',
+        'oemm_xxvi_admin_page',
+        'dashicons-tickets-alt',
+        56
+    );
+}
+function oemm_xxvi_admin_page() {
+    if ( ! current_user_can('manage_options') ) return;
+    global $wpdb;
+    echo '<div class="wrap"><h1>OeMM XXVI Diagnose</h1><pre style="background:#f0f0f0;padding:20px;font-size:12px;overflow:auto;max-height:80vh;">';
+
+    // User-Meta
+    echo "=== BENUTZER MIT HA-UNTERSCHRIFT ===\n";
+    $users = $wpdb->get_results(
+        "SELECT u.ID, u.user_login,
+                MAX(CASE WHEN m.meta_key='_oemm_ha_signed_ts' THEN m.meta_value END) as signed_ts,
+                MAX(CASE WHEN m.meta_key='_oemm_startnumber'  THEN m.meta_value END) as startnr,
+                MAX(CASE WHEN m.meta_key='_oemm_ha_dl_file'   THEN m.meta_value END) as dl_file,
+                MAX(CASE WHEN m.meta_key='_oemm_ha_dl_url'    THEN m.meta_value END) as dl_url
+         FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID=m.user_id
+         WHERE m.meta_key IN ('_oemm_ha_signed_ts','_oemm_startnumber','_oemm_ha_dl_file','_oemm_ha_dl_url')
+         GROUP BY u.ID"
+    );
+    foreach ($users as $u) {
+        $fok = $u->dl_file && file_exists($u->dl_file) ? 'OK ('.filesize($u->dl_file).'B)' : 'FEHLT';
+        echo "User #{$u->ID} ({$u->user_login}) signed={$u->signed_ts} startnr=" . ($u->startnr?:'-') . " pdf={$fok}\n";
+        echo "  DL: {$u->dl_url}\n";
+        // PDF neu generieren Button
+        echo "  <a href='" . admin_url('admin.php?page=oemm-xxvi-admin&regen='.$u->ID) . "' style='color:blue'>PDF neu generieren</a>\n\n";
+    }
+
+    // PDF Regenerieren
+    if ( ! empty($_GET['regen']) ) {
+        $uid = absint($_GET['regen']);
+        $u2  = get_user_by('id', $uid);
+        if ($u2) {
+            $fn  = trim($u2->first_name.' '.$u2->last_name) ?: $u2->display_name;
+            $ts  = get_user_meta($uid,'_oemm_ha_signed_ts',true) ?: date('d.m.Y H:i:s');
+            $sig = get_user_meta($uid,'_oemm_ha_sig_png',true) ?: '';
+            $dir = trailingslashit(wp_upload_dir()['basedir']).'oemm-agreements/';
+            wp_mkdir_p($dir);
+            $fp  = $dir.'ha-'.$uid.'.pdf';
+            oemm_xxvi_generate_pdf($fp, $fn, $u2->user_login, $ts, $sig);
+            $dlurl = add_query_arg(['oemm_dl'=>1,'uid'=>$uid,'token'=>hash('sha256',AUTH_KEY.$uid.basename($fp))],home_url('/'));
+            update_user_meta($uid,'_oemm_ha_dl_file',$fp);
+            update_user_meta($uid,'_oemm_ha_dl_url',$dlurl);
+            $sz = file_exists($fp) ? filesize($fp) : 0;
+            echo "=== PDF REGENERIERT: {$fn} | {$sz} Bytes ===\n";
+            echo "DL-URL: <a href='{$dlurl}' target='_blank'>{$dlurl}</a>\n\n";
+        }
+    }
+
+    // Relevante Tabellen
+    echo "\n=== DB-TABELLEN (omm/oemm/startl) ===\n";
+    $all = $wpdb->get_col('SHOW TABLES');
+    $rel = array_filter($all, fn($t) => preg_match('/(startl|omm|oemm|marathon)/i',$t));
+    if (empty($rel)) { echo 'Keine omm-Tabellen.\n'; }
+    foreach ($rel as $table) {
+        echo "\nTabelle: $table\n";
+        $cols = $wpdb->get_results("DESCRIBE `$table`");
+        foreach ($cols as $c) echo "  {$c->Field} ({$c->Type})\n";
+        $rows = $wpdb->get_results("SELECT * FROM `$table` LIMIT 3", ARRAY_A);
+        foreach ($rows as $row) {
+            foreach ($row as $k=>$v) echo "  $k = ".substr((string)$v,0,80)."\n";
+            echo "  ---\n";
+        }
+    }
+
+    echo '</pre></div>';
+}
+
 add_action( 'admin_init', 'oemm_xxvi_admin_diagnose' );
 function oemm_xxvi_admin_diagnose() {
     if ( empty( $_GET['oemm_diagnose'] ) ) return;
