@@ -234,6 +234,15 @@ function oemm_xxvi_redirect_dashboard() {
     if ( oemm_xxvi_is_admin_user( $user ) ) return;
 
     $uri = $_SERVER['REQUEST_URI'] ?? '';
+
+    // Endlosschleife verhindern
+    if ( strpos( $uri, 'omm-dashboard' )      !== false ) return;
+    if ( strpos( $uri, 'haftungsausschluss' ) !== false ) return;
+    if ( strpos( $uri, 'omm-bestellungen' )   !== false ) return;
+    if ( strpos( $uri, 'omm-downloads' )      !== false ) return;
+    if ( strpos( $uri, 'omm-adresse' )        !== false ) return;
+    if ( strpos( $uri, 'omm-kontodetails' )   !== false ) return;
+
     // Nur auf exaktem /my-account/ (ohne Endpoint)
     if ( is_account_page() && ! is_wc_endpoint_url() ) {
         if ( ! oemm_xxvi_has_signed( $user->ID ) ) {
