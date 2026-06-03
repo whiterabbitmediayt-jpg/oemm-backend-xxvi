@@ -4,65 +4,40 @@ $fullname = trim( $user->first_name . ' ' . $user->last_name ) ?: $user->display
 $username = $user->user_login;
 $initials = strtoupper( mb_substr( $fullname, 0, 1 ) );
 
-// Startnummer: erst Startlisten-Plugin, dann User-Meta
-function oemm_xxvi_get_startnumber( $user_id ) {
+// Startnummer + App-URL aus oemm_participants (Startlisten-Plugin)
+// Tabellenstruktur: customer_id, event_year, startnumber, token_app
+function oemm_xxvi_get_startnumber( int $user_id ): ?string {
     global $wpdb;
-    // Startlisten-Plugin: Tabelle wp_oemm_startliste oder aehnlich
-    $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}%startl%'" );
-    if ( empty($tables) ) $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}%startliste%'" );
-    // Fallback: alle Tabellen mit omm/oemm
-    if ( empty($tables) ) $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}omm%'" );
-    if ( empty($tables) ) $tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}oemm%'" );
-    if ( ! empty($tables) ) {
-        foreach ( $tables as $table ) {
-            // Spaltennamen holen
-            $cols = $wpdb->get_col( "DESCRIBE $table", 0 );
-            // user_id + startnummer Spalte suchen
-            $uid_col = null; $nr_col = null;
-            foreach ($cols as $c) {
-                if ( in_array(strtolower($c), ['user_id','userid','wp_user_id','user']) ) $uid_col = $c;
-                if ( preg_match('/start.*(nr|number|num|numer)/i', $c) || strtolower($c) === 'startnummer' ) $nr_col = $c;
-            }
-            if ( $uid_col && $nr_col ) {
-                $nr = $wpdb->get_var( $wpdb->prepare(
-                    "SELECT `$nr_col` FROM `$table` WHERE `$uid_col` = %d LIMIT 1", $user_id
-                ) );
-                if ( $nr ) return $nr;
-            }
-        }
+    $table = $wpdb->prefix . 'oemm_participants';
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
+        return get_user_meta( $user_id, '_oemm_startnumber', true ) ?: null;
     }
-    // Fallback: User-Meta
-    return get_user_meta( $user_id, '_oemm_startnumber', true ) ?: null;
+    $year = (int) get_option( 'oemm_event_year', (int) date( 'Y' ) );
+    return $wpdb->get_var( $wpdb->prepare(
+        "SELECT startnumber FROM {$table} WHERE customer_id = %d AND event_year = %d LIMIT 1",
+        $user_id, $year
+    ) ) ?: null;
 }
 $startnumber = oemm_xxvi_get_startnumber( $user->ID ) ?: '—';
 
-// App-Link aus Startlisten-Plugin oder Option
-function oemm_xxvi_get_app_url( $user_id ) {
+// Personalisierter App-Link: Basis-URL + token_app aus oemm_participants
+function oemm_xxvi_get_app_url( int $user_id ): string {
     global $wpdb;
-    // Option-Tabelle nach App-URL suchen
-    $url = get_option('oemm_app_url') ?: get_option('omm_app_url') ?: get_option('oemm_xxvi_app_url') ?: '';
-    if ( $url ) return $url;
-    // Startlisten-Tabelle nach QR/App-URL suchen
-    $tables = array_merge(
-        $wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}%startl%'"),
-        $wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}omm%'"),
-        $wpdb->get_col("SHOW TABLES LIKE '{$wpdb->prefix}oemm%'")
-    );
-    foreach ( array_unique($tables) as $table ) {
-        $cols = $wpdb->get_col("DESCRIBE $table", 0);
-        $uid_col = null; $url_col = null;
-        foreach ($cols as $c) {
-            if ( in_array(strtolower($c), ['user_id','userid','wp_user_id']) ) $uid_col = $c;
-            if ( preg_match('/(qr|app|url|link)/i', $c) ) $url_col = $c;
-        }
-        if ( $uid_col && $url_col ) {
-            $u = $wpdb->get_var( $wpdb->prepare(
-                "SELECT `$url_col` FROM `$table` WHERE `$uid_col` = %d LIMIT 1", $user_id
-            ) );
-            if ( $u && filter_var($u, FILTER_VALIDATE_URL) ) return $u;
+    $table = $wpdb->prefix . 'oemm_participants';
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table ) {
+        $year  = (int) get_option( 'oemm_event_year', (int) date( 'Y' ) );
+        $token = $wpdb->get_var( $wpdb->prepare(
+            "SELECT token_app FROM {$table} WHERE customer_id = %d AND event_year = %d LIMIT 1",
+            $user_id, $year
+        ) );
+        if ( $token ) {
+            $base = rtrim( (string) get_option( 'oemm_app_url', 'https://moped-tracker.web.app/t/' ), '/' );
+            return $base . '/' . $token;
         }
     }
-    return 'https://app.mopedmarathon.at';
+    // Fallback: kein personalisierter Token verfuegbar
+    $fallback = get_option( 'oemm_app_url' ) ?: get_option( 'omm_app_url' ) ?: 'https://app.mopedmarathon.at';
+    return rtrim( (string) $fallback, '/' );
 }
 $app_url = oemm_xxvi_get_app_url( $user->ID );
 

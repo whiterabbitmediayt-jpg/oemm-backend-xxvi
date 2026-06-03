@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     1.9.4
+ * Version:     2.3.0
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '1.9.4' );
+define( 'OEMM_XXVI_VERSION', '2.3.0' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -67,12 +67,16 @@ add_action( 'upgrader_process_complete', function() {
 }, 10, 0 );
 define( 'OEMM_XXVI_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'OEMM_XXVI_URL',     plugin_dir_url( __FILE__ ) );
-define( 'OEMM_XXVI_TABLE',   'oemm_xxvi_agreements' );
+define( 'OEMM_XXVI_TABLE',        'oemm_xxvi_agreements' );
+define( 'OEMM_XXVI_FOTOS_TABLE',  'oemm_xxvi_fotos' );
+define( 'OEMM_XXVI_LIKES_TABLE',  'oemm_xxvi_foto_likes' );
 
 /* ---------------------------------------------------------------
    ACTIVATION
 --------------------------------------------------------------- */
 register_activation_hook( __FILE__, 'oemm_xxvi_activate' );
+
+
 function oemm_xxvi_activate() {
     global $wpdb;
     $table   = $wpdb->prefix . OEMM_XXVI_TABLE;
@@ -91,8 +95,268 @@ function oemm_xxvi_activate() {
     ) {$charset};";
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
+
+    // Fotos-Tabelle
+    $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $sql_fotos = "CREATE TABLE IF NOT EXISTS {$fotos_table} (
+        id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id         BIGINT UNSIGNED NOT NULL,
+        event_year      SMALLINT UNSIGNED NOT NULL DEFAULT 2026,
+        filename        VARCHAR(255) NOT NULL,
+        filepath        VARCHAR(500) NOT NULL,
+        filesize        INT UNSIGNED DEFAULT NULL,
+        shot_at         DATETIME DEFAULT NULL,
+        uploaded_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        is_public       TINYINT(1) NOT NULL DEFAULT 0,
+        public_set_at   DATETIME DEFAULT NULL,
+        token_type      VARCHAR(10) DEFAULT NULL COMMENT 'app oder paper',
+        upload_ms       INT UNSIGNED DEFAULT NULL COMMENT 'Upload-Dauer in ms',
+        PRIMARY KEY (id),
+        KEY idx_user_year (user_id, event_year),
+        KEY idx_public (is_public, event_year),
+        KEY idx_uploaded (uploaded_at)
+    ) {$charset};";
+    dbDelta( $sql_fotos );
+
+    // Likes-Tabelle
+    $likes_table = $wpdb->prefix . OEMM_XXVI_LIKES_TABLE;
+    $sql_likes = "CREATE TABLE IF NOT EXISTS {$likes_table} (
+        id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        foto_id         BIGINT UNSIGNED NOT NULL,
+        liker_user_id   BIGINT UNSIGNED NOT NULL,
+        liked_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_foto_user (foto_id, liker_user_id),
+        KEY idx_foto (foto_id),
+        KEY idx_liker (liker_user_id)
+    ) {$charset};";
+    dbDelta( $sql_likes );
+
+    // Foto-Storage Verzeichnis anlegen + sichern
+    oemm_xxvi_fotos_init_storage();
+
     oemm_xxvi_add_endpoints();
     flush_rewrite_rules();
+}
+
+/* ---------------------------------------------------------------
+   FOTO STORAGE — Pfade, Verzeichnis, .htaccess
+--------------------------------------------------------------- */
+
+/**
+ * Gibt den Basis-Upload-Pfad für Fotos zurück
+ * Struktur: /wp-content/uploads/oemm-fotos/{year}/{user_id}/
+ */
+function oemm_xxvi_fotos_get_dir( int $user_id, int $year = 0 ): string {
+    if ( ! $year ) {
+        $year = (int) get_option( 'oemm_event_year', date( 'Y' ) );
+    }
+    $upload = wp_upload_dir();
+    return trailingslashit( $upload['basedir'] ) . "oemm-fotos/{$year}/{$user_id}";
+}
+
+/**
+ * Gibt die öffentliche URL zurück (wird NICHT direkt exposed — nur intern)
+ */
+function oemm_xxvi_fotos_get_url( int $user_id, int $year = 0 ): string {
+    if ( ! $year ) {
+        $year = (int) get_option( 'oemm_event_year', date( 'Y' ) );
+    }
+    $upload = wp_upload_dir();
+    return trailingslashit( $upload['baseurl'] ) . "oemm-fotos/{$year}/{$user_id}";
+}
+
+/**
+ * Verzeichnis für einen User anlegen (inkl. Index-Schutz)
+ */
+function oemm_xxvi_fotos_ensure_dir( int $user_id, int $year = 0 ): string {
+    $dir = oemm_xxvi_fotos_get_dir( $user_id, $year );
+    if ( ! is_dir( $dir ) ) {
+        wp_mkdir_p( $dir );
+        // index.php Schutz gegen Directory-Listing
+        file_put_contents( $dir . '/index.php', '<?php // Silence is golden.' );
+    }
+    return $dir;
+}
+
+/**
+ * Initialisiert das Root-Storage-Verzeichnis beim Plugin-Aktivieren
+ * Schreibt .htaccess: kein Direktzugriff auf Fotos
+ */
+function oemm_xxvi_fotos_init_storage(): void {
+    $upload   = wp_upload_dir();
+    $root_dir = trailingslashit( $upload['basedir'] ) . 'oemm-fotos';
+
+    if ( ! is_dir( $root_dir ) ) {
+        wp_mkdir_p( $root_dir );
+    }
+
+    // .htaccess: Direktzugriff komplett sperren
+    $htaccess = $root_dir . '/.htaccess';
+    if ( ! file_exists( $htaccess ) ) {
+        $rules  = "# OeMM Fotos - kein Direktzugriff\n";
+        $rules .= "Options -Indexes\n";
+        $rules .= "<FilesMatch \".\\+\\.(jpg|jpeg|png|gif|webp)$\">\n";
+        $rules .= "    Require all denied\n";
+        $rules .= "</FilesMatch>\n";
+        file_put_contents( $htaccess, $rules );
+    }
+
+    // index.php im Root
+    $index = $root_dir . '/index.php';
+    if ( ! file_exists( $index ) ) {
+        file_put_contents( $index, '<?php // Silence is golden.' );
+    }
+}
+
+/**
+ * Foto sicher ausliefern (eingeloggt + event_year Check)
+ * Aufruf: ?oemm_foto=<foto_id>&token=<hash>
+ */
+add_action( 'init', 'oemm_xxvi_fotos_serve' );
+function oemm_xxvi_fotos_serve(): void {
+    if ( empty( $_GET['oemm_foto'] ) ) return;
+
+    $foto_id = (int) $_GET['oemm_foto'];
+    $token   = sanitize_text_field( $_GET['token'] ?? '' );
+
+    // Eingeloggt?
+    if ( ! is_user_logged_in() ) {
+        wp_die( 'Bitte einloggen.', 403 );
+    }
+
+    global $wpdb;
+    $current_user = wp_get_current_user();
+    $table        = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+
+    $foto = $wpdb->get_row( $wpdb->prepare(
+        "SELECT * FROM {$table} WHERE id = %d LIMIT 1", $foto_id
+    ) );
+
+    if ( ! $foto ) wp_die( 'Foto nicht gefunden.', 404 );
+
+    // Token-Check (verhindert enumeration: user muss korrekten hash kennen)
+    $expected = hash( 'sha256', AUTH_KEY . $foto->id . $foto->user_id );
+    if ( ! hash_equals( $expected, $token ) ) wp_die( 'Ungültiger Token.', 403 );
+
+    // Jahres-Isolation: nur Teilnehmer desselben event_year
+    $event_year = (int) $foto->event_year;
+    $is_same_year_participant = $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}oemm_participants WHERE customer_id = %d AND event_year = %d LIMIT 1",
+        $current_user->ID, $event_year
+    ) );
+
+    // Eigenes Foto ODER anderes Foto (nur public) + selbes Jahr
+    $is_owner  = ( (int) $foto->user_id === (int) $current_user->ID );
+    $is_public = ( (int) $foto->is_public === 1 );
+
+    if ( ! $is_owner && ( ! $is_public || ! $is_same_year_participant ) ) {
+        wp_die( 'Zugriff verweigert.', 403 );
+    }
+
+    // Datei ausliefern
+    $filepath = ABSPATH . 'wp-content/uploads/' . ltrim( $foto->filepath, '/' );
+    if ( ! file_exists( $filepath ) ) wp_die( 'Datei nicht gefunden.', 404 );
+
+    $mime = mime_content_type( $filepath ) ?: 'image/jpeg';
+    header( 'Content-Type: ' . $mime );
+    header( 'Content-Length: ' . filesize( $filepath ) );
+    header( 'Cache-Control: private, max-age=3600' );
+    header( 'X-Content-Type-Options: nosniff' );
+    readfile( $filepath );
+    exit;
+}
+
+
+/* ---------------------------------------------------------------
+   ZIP DOWNLOAD — alle Fotos eines Users on-demand
+--------------------------------------------------------------- */
+add_action( 'init', 'oemm_xxvi_fotos_serve_zip' );
+function oemm_xxvi_fotos_serve_zip(): void {
+    if ( empty( $_GET['oemm_zip'] ) ) return;
+
+    // Eingeloggt?
+    if ( ! is_user_logged_in() ) {
+        wp_die( 'Bitte einloggen.', 403 );
+    }
+
+    $current_user = wp_get_current_user();
+    $uid          = (int) ( $_GET['uid']   ?? 0 );
+    $year         = (int) ( $_GET['year']  ?? 0 );
+    $token        = sanitize_text_field( $_GET['token'] ?? '' );
+
+    // Token + User validieren
+    $expected = hash( 'sha256', AUTH_KEY . $uid . $year . 'zip' );
+    if ( ! hash_equals( $expected, $token ) || $uid !== (int) $current_user->ID ) {
+        wp_die( 'Ungültiger Token.', 403 );
+    }
+
+    // ZIP noch nicht verfügbar?
+    $zip_date = get_option( 'oemm_zip_available_date', '' );
+    if ( ! $zip_date || strtotime( $zip_date ) > time() ) {
+        wp_die( 'ZIP noch nicht verfügbar.', 403 );
+    }
+
+    global $wpdb;
+    $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $fotos = $wpdb->get_results( $wpdb->prepare(
+        "SELECT filename, filepath FROM {$fotos_table}
+         WHERE user_id = %d AND event_year = %d ORDER BY shot_at ASC",
+        $uid, $year
+    ) );
+
+    if ( empty( $fotos ) ) {
+        wp_die( 'Keine Fotos vorhanden.', 404 );
+    }
+
+    $upload   = wp_upload_dir();
+    $basedir  = trailingslashit( $upload['basedir'] );
+
+    // ZipArchive
+    if ( ! class_exists( 'ZipArchive' ) ) {
+        wp_die( 'ZIP-Funktion nicht verfügbar.', 500 );
+    }
+
+    $zip_tmp = sys_get_temp_dir() . '/oemm_fotos_' . $uid . '_' . $year . '_' . time() . '.zip';
+    $zip     = new ZipArchive();
+
+    if ( $zip->open( $zip_tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE ) !== true ) {
+        wp_die( 'ZIP konnte nicht erstellt werden.', 500 );
+    }
+
+    $added = 0;
+    foreach ( $fotos as $foto ) {
+        $filepath = $basedir . ltrim( $foto->filepath, '/' );
+        if ( file_exists( $filepath ) ) {
+            $zip->addFile( $filepath, 'oemm_' . $year . '_' . $foto->filename );
+            $added++;
+        }
+    }
+    $zip->close();
+
+    if ( $added === 0 ) {
+        @unlink( $zip_tmp );
+        wp_die( 'Keine Dateien gefunden.', 404 );
+    }
+
+    // Download senden
+    $filename = 'oemm_fotos_' . $year . '_' . $uid . '.zip';
+    header( 'Content-Type: application/zip' );
+    header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+    header( 'Content-Length: ' . filesize( $zip_tmp ) );
+    header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+    header( 'Pragma: no-cache' );
+    readfile( $zip_tmp );
+    @unlink( $zip_tmp );
+    exit;
+}
+
+/**
+ * Foto-URL generieren (für Frontend — mit Token)
+ */
+function oemm_xxvi_fotos_get_serve_url( int $foto_id, int $user_id ): string {
+    $token = hash( 'sha256', AUTH_KEY . $foto_id . $user_id );
+    return add_query_arg( [ 'oemm_foto' => $foto_id, 'token' => $token ], home_url( '/' ) );
 }
 register_deactivation_hook( __FILE__, 'flush_rewrite_rules' );
 
@@ -126,6 +390,7 @@ function oemm_xxvi_add_endpoints() {
     add_rewrite_endpoint( 'omm-freundebuch',    EP_ROOT | EP_PAGES );
     add_rewrite_endpoint( 'omm-ergebnisse',     EP_ROOT | EP_PAGES );
     add_rewrite_endpoint( 'omm-fotos',          EP_ROOT | EP_PAGES );
+    add_rewrite_endpoint( 'omm-album',          EP_ROOT | EP_PAGES );
 }
 
 /* ---------------------------------------------------------------
@@ -170,6 +435,7 @@ function oemm_xxvi_menu_items( $items ) {
         'omm-freundebuch'    => '👥 Freundebuch',
         'omm-ergebnisse'     => '🏁 Ergebnisse',
         'omm-fotos'          => '📷 Meine Fotos',
+        'omm-album'          => '🖼️ Öffentliches Album',
         'omm-downloads'      => '⬇ Downloads',
         'omm-adresse'        => '📍 Adresse',
         'omm-kontodetails'   => '⚙ Kontodetails',
@@ -208,6 +474,16 @@ function oemm_xxvi_page_bestellungen() {
     include OEMM_XXVI_PATH . 'views/bestellungen.php';
 }
 
+// WC Standard view-order Endpoint überschreiben — verhindert den "Anzeigen"-Button und alten Content
+add_action( 'init', function() {
+    // WC rendert view-order via woocommerce_account_view-order_endpoint
+    // Wir entfernen den WC-Default und ersetzen durch leeren Output
+    // (unser full-width.php lädt view-order.php direkt via include)
+    remove_all_actions( 'woocommerce_account_view-order_endpoint' );
+    // Leerer Replacement-Hook damit WC keinen Fehler wirft
+    add_action( 'woocommerce_account_view-order_endpoint', '__return_null' );
+}, 20 );
+
 add_action( 'woocommerce_account_omm-downloads_endpoint', 'oemm_xxvi_page_downloads' );
 function oemm_xxvi_page_downloads() {
     include OEMM_XXVI_PATH . 'views/downloads.php';
@@ -236,10 +512,17 @@ function oemm_xxvi_placeholder_page( $title, $icon, $desc ) {
     echo '<p style="color:rgba(255,255,255,.4);font-size:14px">' . esc_html($desc) . '</p>';
     echo '</div>';
 }
-function oemm_xxvi_page_packliste()   { oemm_xxvi_placeholder_page('Packliste','✅','Deine persönliche Packliste für den ÖMM 2026 — bald verfügbar.'); }
+function oemm_xxvi_page_packliste()   { include OEMM_XXVI_PATH . 'views/packliste.php'; }
 function oemm_xxvi_page_freundebuch() { oemm_xxvi_placeholder_page('Freundebuch','👥','Wer fährt noch mit? Das Freundebuch kommt bald.'); }
 function oemm_xxvi_page_ergebnisse()  { oemm_xxvi_placeholder_page('Ergebnisse','🏁','Die Ergebnisliste wird nach dem Event veröffentlicht.'); }
-function oemm_xxvi_page_fotos()       { oemm_xxvi_placeholder_page('Meine Fotos','📷','Deine Fotos vom ÖMM 2026 — nach dem Event hier abrufbar.'); }
+function oemm_xxvi_page_fotos() {
+    include OEMM_XXVI_PATH . 'views/fotos.php';
+}
+
+add_action( 'woocommerce_account_omm-album_endpoint', 'oemm_xxvi_page_album' );
+function oemm_xxvi_page_album() {
+    include OEMM_XXVI_PATH . 'views/album.php';
+}
 
 // Dashboard als Standard-Landingpage nach Login
 add_filter( 'woocommerce_login_redirect', 'oemm_xxvi_login_redirect', 10, 2 );
@@ -272,6 +555,7 @@ function oemm_xxvi_redirect_dashboard() {
     if ( strpos( $uri, 'omm-freundebuch' )     !== false ) return;
     if ( strpos( $uri, 'omm-ergebnisse' )      !== false ) return;
     if ( strpos( $uri, 'omm-fotos' )           !== false ) return;
+    if ( strpos( $uri, 'omm-album' )           !== false ) return;
 
     // Nur auf exaktem /my-account/ (ohne Endpoint)
     if ( is_account_page() && ! is_wc_endpoint_url() ) {
@@ -287,6 +571,64 @@ function oemm_xxvi_redirect_dashboard() {
 /* ---------------------------------------------------------------
    REST API
 --------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------
+   TEMPORÄRER DEBUG ENDPOINT — NACH FIX ENTFERNEN
+--------------------------------------------------------------- */
+add_action( 'rest_api_init', function() {
+    register_rest_route( 'oemm-xxvi/v1', '/debug-album', [
+        'methods'             => 'GET',
+        'callback'            => 'oemm_xxvi_debug_album',
+        'permission_callback' => function() { return current_user_can( 'manage_options' ); },
+    ] );
+} );
+function oemm_xxvi_debug_album() {
+    global $wpdb;
+    $event_year   = (int) get_option( 'oemm_event_year', date('Y') );
+    $album_active = get_option( 'oemm_album_active', 0 );
+    $fotos_table  = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $likes_table  = $wpdb->prefix . OEMM_XXVI_LIKES_TABLE;
+
+    $fotos_exists = ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $fotos_table ) ) === $fotos_table );
+    $likes_exists = ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $likes_table ) ) === $likes_table );
+
+    $all_fotos = $fotos_exists ? $wpdb->get_results(
+        "SELECT id, user_id, is_public, event_year, filepath FROM {$fotos_table} ORDER BY id"
+    ) : [];
+
+    $public_fotos = $fotos_exists ? $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, user_id, filepath, event_year FROM {$fotos_table} WHERE is_public=1 AND event_year=%d",
+        $event_year
+    ) ) : [];
+
+    $serve_test = [];
+    foreach ( $public_fotos as $f ) {
+        $token    = hash( 'sha256', AUTH_KEY . $f->id . $f->user_id );
+        $url      = home_url( '/' ) . '?oemm_foto=' . $f->id . '&token=' . $token;
+        $filepath = ABSPATH . 'wp-content/uploads/' . ltrim( $f->filepath, '/' );
+        $serve_test[] = [
+            'id'          => $f->id,
+            'filepath'    => $f->filepath,
+            'file_exists' => file_exists( $filepath ),
+            'serve_url'   => $url,
+        ];
+    }
+
+    return [
+        'event_year'        => $event_year,
+        'album_active'      => $album_active,
+        'fotos_table'       => $fotos_table,
+        'likes_table'       => $likes_table,
+        'fotos_table_exists'=> $fotos_exists,
+        'likes_table_exists'=> $likes_exists,
+        'all_fotos_count'   => count( $all_fotos ),
+        'all_fotos'         => $all_fotos,
+        'public_fotos_count'=> count( $public_fotos ),
+        'serve_test'        => $serve_test,
+        'wp_prefix'         => $wpdb->prefix,
+    ];
+}
+
 add_action( 'rest_api_init', 'oemm_xxvi_register_routes' );
 function oemm_xxvi_register_routes() {
     register_rest_route( 'oemm-xxvi/v1', '/sign', [
@@ -294,6 +636,270 @@ function oemm_xxvi_register_routes() {
         'callback'            => 'oemm_xxvi_rest_sign',
         'permission_callback' => fn() => is_user_logged_in(),
     ] );
+
+    // Foto-Upload vom Raspberry Pi
+    register_rest_route( 'oemm-xxvi/v1', '/foto/upload', [
+        'methods'             => 'POST',
+        'callback'            => 'oemm_xxvi_rest_foto_upload',
+        'permission_callback' => 'oemm_xxvi_rest_check_foto_key',
+    ] );
+
+    // Foto Public/Privat Toggle (eingeloggte User)
+    register_rest_route( 'oemm-xxvi/v1', '/foto/toggle-public', [
+        'methods'             => 'POST',
+        'callback'            => 'oemm_xxvi_rest_foto_toggle_public',
+        'permission_callback' => fn() => is_user_logged_in(),
+    ] );
+
+    // Like/Unlike (eingeloggte User)
+    register_rest_route( 'oemm-xxvi/v1', '/foto/like', [
+        'methods'             => 'POST',
+        'callback'            => 'oemm_xxvi_rest_foto_like',
+        'permission_callback' => fn() => is_user_logged_in(),
+    ] );
+}
+
+/* ---------------------------------------------------------------
+   FOTO REST API — Upload, Toggle, Like
+--------------------------------------------------------------- */
+
+/**
+ * Permission: prüft X-OEMM-Foto-Key Header
+ */
+function oemm_xxvi_rest_check_foto_key( WP_REST_Request $req ): bool {
+    $key    = $req->get_header( 'X-OEMM-Foto-Key' );
+    $stored = get_option( 'oemm_foto_api_key', '' );
+    if ( ! $stored || ! $key ) return false;
+    return hash_equals( (string) $stored, (string) $key );
+}
+
+/**
+ * POST /wp-json/oemm-xxvi/v1/foto/upload
+ *
+ * Erwartet: multipart/form-data
+ *   token    = QR-Token des Teilnehmers (app oder paper)
+ *   foto     = JPEG-Datei
+ *   shot_at  = optionaler ISO-Zeitstempel (wann Foto gemacht)
+ *
+ * Header: X-OEMM-Foto-Key: <api_key>
+ */
+function oemm_xxvi_rest_foto_upload( WP_REST_Request $req ): WP_REST_Response|WP_Error {
+    global $wpdb;
+
+    $start_ms = round( microtime( true ) * 1000 );
+
+    // --- Token auflösen ---
+    $token = sanitize_text_field( $req->get_param( 'token' ) ?? '' );
+    if ( strlen( $token ) < 10 ) {
+        return new WP_Error( 'invalid_token', 'Token fehlt oder zu kurz.', [ 'status' => 400 ] );
+    }
+
+    $parts_table = $wpdb->prefix . 'oemm_participants';
+    $event_year  = (int) get_option( 'oemm_event_year', (int) date( 'Y' ) );
+
+    $row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT customer_id, token_app, token_paper FROM {$parts_table}
+         WHERE (token_app = %s OR token_paper = %s) AND event_year = %d LIMIT 1",
+        $token, $token, $event_year
+    ) );
+
+    if ( ! $row ) {
+        return new WP_Error( 'token_not_found', 'Token nicht gefunden.', [ 'status' => 404 ] );
+    }
+
+    $user_id    = (int) $row->customer_id;
+    $token_type = ( $row->token_app === $token ) ? 'app' : 'paper';
+
+    // --- Rate-Limit: max 1 Upload alle 5 Sekunden pro User ---
+    $rate_key  = 'oemm_foto_rate_' . $user_id;
+    $last_upload = get_transient( $rate_key );
+    if ( $last_upload ) {
+        return new WP_Error( 'rate_limit', 'Zu schnell. Bitte 5 Sekunden warten.', [ 'status' => 429 ] );
+    }
+    set_transient( $rate_key, 1, 5 );
+
+    // --- Datei prüfen ---
+    $files = $req->get_file_params();
+    if ( empty( $files['foto'] ) || $files['foto']['error'] !== UPLOAD_ERR_OK ) {
+        return new WP_Error( 'no_file', 'Keine Datei oder Upload-Fehler.', [ 'status' => 400 ] );
+    }
+
+    $file     = $files['foto'];
+    $tmp_path = $file['tmp_name'];
+    $filesize = (int) $file['size'];
+
+    // Max 25 MB
+    if ( $filesize > 25 * 1024 * 1024 ) {
+        return new WP_Error( 'file_too_large', 'Datei zu groß (max 25 MB).', [ 'status' => 413 ] );
+    }
+
+    // MIME prüfen (nur JPEG/PNG akzeptiert)
+    $mime = mime_content_type( $tmp_path );
+    $allowed_mimes = [ 'image/jpeg', 'image/jpg', 'image/png' ];
+    if ( ! in_array( $mime, $allowed_mimes, true ) ) {
+        return new WP_Error( 'invalid_mime', 'Nur JPEG/PNG erlaubt.', [ 'status' => 415 ] );
+    }
+
+    $ext = ( $mime === 'image/png' ) ? 'png' : 'jpg';
+
+    // --- Verzeichnis anlegen ---
+    $dir = oemm_xxvi_fotos_ensure_dir( $user_id, $event_year );
+
+    // Eindeutiger Dateiname: timestamp + random
+    $filename = date( 'YmdHis' ) . '_' . wp_generate_password( 8, false ) . '.' . $ext;
+    $dest     = $dir . '/' . $filename;
+
+    // Relativer Pfad (ohne ABSPATH/wp-content/uploads/ Prefix)
+    $upload      = wp_upload_dir();
+    $rel_path    = str_replace( trailingslashit( $upload['basedir'] ), '', $dest );
+
+    // --- Datei verschieben ---
+    if ( ! move_uploaded_file( $tmp_path, $dest ) ) {
+        return new WP_Error( 'move_failed', 'Datei konnte nicht gespeichert werden.', [ 'status' => 500 ] );
+    }
+
+    // --- shot_at parsen ---
+    $shot_at_raw = sanitize_text_field( $req->get_param( 'shot_at' ) ?? '' );
+    $shot_at     = null;
+    if ( $shot_at_raw ) {
+        $ts = strtotime( $shot_at_raw );
+        if ( $ts ) $shot_at = date( 'Y-m-d H:i:s', $ts );
+    }
+    if ( ! $shot_at ) $shot_at = current_time( 'mysql' );
+
+    // --- Upload-Dauer ---
+    $upload_ms = round( microtime( true ) * 1000 ) - $start_ms;
+
+    // --- DB-Eintrag ---
+    $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $inserted = $wpdb->insert( $fotos_table, [
+        'user_id'     => $user_id,
+        'event_year'  => $event_year,
+        'filename'    => $filename,
+        'filepath'    => $rel_path,
+        'filesize'    => $filesize,
+        'shot_at'     => $shot_at,
+        'uploaded_at' => current_time( 'mysql' ),
+        'token_type'  => $token_type,
+        'upload_ms'   => (int) $upload_ms,
+    ], [ '%d', '%d', '%s', '%s', '%d', '%s', '%s', '%s', '%d' ] );
+
+    if ( ! $inserted ) {
+        // Datei wieder löschen wenn DB-Insert fehlschlägt
+        @unlink( $dest );
+        return new WP_Error( 'db_error', 'Datenbankfehler beim Speichern.', [ 'status' => 500 ] );
+    }
+
+    $foto_id = (int) $wpdb->insert_id;
+
+    return new WP_REST_Response( [
+        'success'    => true,
+        'foto_id'    => $foto_id,
+        'user_id'    => $user_id,
+        'token_type' => $token_type,
+        'filename'   => $filename,
+        'upload_ms'  => (int) $upload_ms,
+    ], 200 );
+}
+
+/**
+ * POST /wp-json/oemm-xxvi/v1/foto/toggle-public
+ * Body: { foto_id: 42, public: true/false }
+ */
+function oemm_xxvi_rest_foto_toggle_public( WP_REST_Request $req ): WP_REST_Response|WP_Error {
+    global $wpdb;
+    $user    = wp_get_current_user();
+    $foto_id = (int) ( $req->get_param( 'foto_id' ) ?? 0 );
+    $public  = (bool) ( $req->get_param( 'public' ) ?? false );
+    $table   = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+
+    // Nur eigene Fotos
+    $foto = $wpdb->get_row( $wpdb->prepare(
+        "SELECT id, user_id FROM {$table} WHERE id = %d AND user_id = %d LIMIT 1",
+        $foto_id, $user->ID
+    ) );
+
+    if ( ! $foto ) {
+        return new WP_Error( 'not_found', 'Foto nicht gefunden oder kein Zugriff.', [ 'status' => 404 ] );
+    }
+
+    $data   = [ 'is_public' => $public ? 1 : 0 ];
+    $format = [ '%d' ];
+    if ( $public ) {
+        $data['public_set_at'] = current_time( 'mysql' );
+        $format[]              = '%s';
+    } else {
+        $data['public_set_at'] = null;
+        $format[]              = '%s';
+    }
+
+    $wpdb->update( $table, $data, [ 'id' => $foto_id ], $format, [ '%d' ] );
+
+    return new WP_REST_Response( [ 'success' => true, 'foto_id' => $foto_id, 'is_public' => $public ], 200 );
+}
+
+/**
+ * POST /wp-json/oemm-xxvi/v1/foto/like
+ * Body: { foto_id: 42 }  — togglet Like (like wenn nicht vorhanden, unlike wenn vorhanden)
+ */
+function oemm_xxvi_rest_foto_like( WP_REST_Request $req ): WP_REST_Response|WP_Error {
+    global $wpdb;
+    $user    = wp_get_current_user();
+    $foto_id = (int) ( $req->get_param( 'foto_id' ) ?? 0 );
+
+    $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $likes_table = $wpdb->prefix . OEMM_XXVI_LIKES_TABLE;
+
+    // Foto muss existieren + Jahres-Isolation prüfen
+    $event_year = (int) get_option( 'oemm_event_year', (int) date( 'Y' ) );
+    $foto = $wpdb->get_row( $wpdb->prepare(
+        "SELECT id, user_id, event_year FROM {$fotos_table} WHERE id = %d LIMIT 1", $foto_id
+    ) );
+
+    if ( ! $foto ) {
+        return new WP_Error( 'not_found', 'Foto nicht gefunden.', [ 'status' => 404 ] );
+    }
+
+    // Jahres-Check: User muss Teilnehmer desselben Jahres sein
+    $is_participant = $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}oemm_participants WHERE customer_id = %d AND event_year = %d LIMIT 1",
+        $user->ID, (int) $foto->event_year
+    ) );
+
+    if ( ! $is_participant ) {
+        return new WP_Error( 'forbidden', 'Kein Zugriff auf dieses Event-Jahr.', [ 'status' => 403 ] );
+    }
+
+    // Like schon vorhanden?
+    $existing = $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM {$likes_table} WHERE foto_id = %d AND liker_user_id = %d LIMIT 1",
+        $foto_id, $user->ID
+    ) );
+
+    if ( $existing ) {
+        // Unlike
+        $wpdb->delete( $likes_table, [ 'foto_id' => $foto_id, 'liker_user_id' => $user->ID ], [ '%d', '%d' ] );
+        $liked = false;
+    } else {
+        // Like
+        $wpdb->insert( $likes_table, [
+            'foto_id'       => $foto_id,
+            'liker_user_id' => $user->ID,
+            'liked_at'      => current_time( 'mysql' ),
+        ], [ '%d', '%d', '%s' ] );
+        $liked = true;
+    }
+
+    $like_count = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$likes_table} WHERE foto_id = %d", $foto_id
+    ) );
+
+    return new WP_REST_Response( [
+        'success'    => true,
+        'foto_id'    => $foto_id,
+        'liked'      => $liked,
+        'like_count' => $like_count,
+    ], 200 );
 }
 
 function oemm_xxvi_rest_sign( WP_REST_Request $req ) {
@@ -722,68 +1328,267 @@ function oemm_xxvi_admin_menu() {
     );
 }
 function oemm_xxvi_admin_page() {
-    if ( ! current_user_can('manage_options') ) return;
-    global $wpdb;
-    echo '<div class="wrap"><h1>OeMM XXVI Diagnose</h1><pre style="background:#f0f0f0;padding:20px;font-size:12px;overflow:auto;max-height:80vh;">';
+    if ( ! current_user_can( 'manage_options' ) ) return;
 
-    // User-Meta
+    // Settings speichern
+    if ( isset( $_POST['oemm_settings_nonce'] ) && wp_verify_nonce( $_POST['oemm_settings_nonce'], 'oemm_save_settings' ) ) {
+        // API Key neu generieren?
+        if ( ! empty( $_POST['oemm_regen_key'] ) ) {
+            $new_key = bin2hex( random_bytes( 24 ) );
+            update_option( 'oemm_foto_api_key', $new_key );
+        }
+        // ZIP Datum
+        if ( isset( $_POST['oemm_zip_available_date'] ) ) {
+            update_option( 'oemm_zip_available_date', sanitize_text_field( $_POST['oemm_zip_available_date'] ) );
+        }
+        // Album aktiv
+        update_option( 'oemm_album_active', ! empty( $_POST['oemm_album_active'] ) ? '1' : '0' );
+        echo '<div class="notice notice-success is-dismissible"><p>Einstellungen gespeichert.</p></div>';
+    }
+
+    // PDF Regenerieren
+    if ( ! empty( $_GET['regen'] ) && check_admin_referer( 'oemm_regen_' . (int) $_GET['regen'] ) ) {
+        $uid = absint( $_GET['regen'] );
+        $u2  = get_user_by( 'id', $uid );
+        if ( $u2 ) {
+            $fn  = trim( $u2->first_name . ' ' . $u2->last_name ) ?: $u2->display_name;
+            $ts  = get_user_meta( $uid, '_oemm_ha_signed_ts', true ) ?: date( 'd.m.Y H:i:s' );
+            $sig = get_user_meta( $uid, '_oemm_ha_sig_png', true ) ?: '';
+            $dir = trailingslashit( wp_upload_dir()['basedir'] ) . 'oemm-agreements/';
+            wp_mkdir_p( $dir );
+            $fp  = $dir . 'ha-' . $uid . '.pdf';
+            oemm_xxvi_generate_pdf( $fp, $fn, $u2->user_login, $ts, $sig );
+            $dlurl = add_query_arg( [ 'oemm_dl' => 1, 'uid' => $uid, 'token' => hash( 'sha256', AUTH_KEY . $uid . basename($fp) ) ], home_url('/') );
+            update_user_meta( $uid, '_oemm_ha_dl_file', $fp );
+            update_user_meta( $uid, '_oemm_ha_dl_url', $dlurl );
+        }
+    }
+
+    global $wpdb;
+    $tab         = sanitize_key( $_GET['tab'] ?? 'settings' );
+    $api_key     = get_option( 'oemm_foto_api_key', '' );
+    $zip_date    = get_option( 'oemm_zip_available_date', '' );
+    $album_active = get_option( 'oemm_album_active', '0' );
+    $event_year  = (int) get_option( 'oemm_event_year', date('Y') );
+
+    // --- Stats ---
+    $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $likes_table = $wpdb->prefix . OEMM_XXVI_LIKES_TABLE;
+    $stats = [ 'total' => 0, 'public' => 0, 'likes' => 0, 'app' => 0, 'paper' => 0, 'top_users' => [], 'top_foto' => null, 'per_hour' => [] ];
+    $tables_exist = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $fotos_table ) ) === $fotos_table;
+    if ( $tables_exist ) {
+        $stats['total']  = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$fotos_table} WHERE event_year=%d", $event_year ) );
+        $stats['public'] = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$fotos_table} WHERE event_year=%d AND is_public=1", $event_year ) );
+        $stats['likes']  = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$likes_table} l JOIN {$fotos_table} f ON f.id=l.foto_id WHERE f.event_year=%d", $event_year ) );
+        $stats['app']    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$fotos_table} WHERE event_year=%d AND token_type='app'", $event_year ) );
+        $stats['paper']  = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$fotos_table} WHERE event_year=%d AND token_type='paper'", $event_year ) );
+        $stats['top_users'] = $wpdb->get_results( $wpdb->prepare(
+            "SELECT f.user_id, u.display_name, COUNT(*) as foto_count,
+                    SUM(f.is_public) as public_count,
+                    (SELECT COUNT(*) FROM {$likes_table} l WHERE l.foto_id IN (SELECT id FROM {$fotos_table} f2 WHERE f2.user_id=f.user_id AND f2.event_year=%d)) as like_count
+             FROM {$fotos_table} f LEFT JOIN {$wpdb->users} u ON u.ID=f.user_id
+             WHERE f.event_year=%d GROUP BY f.user_id ORDER BY foto_count DESC LIMIT 10",
+            $event_year, $event_year
+        ) );
+        $stats['top_foto'] = $wpdb->get_row( $wpdb->prepare(
+            "SELECT f.id, f.user_id, f.filename, u.display_name, COUNT(l.id) as like_count
+             FROM {$fotos_table} f
+             LEFT JOIN {$likes_table} l ON l.foto_id=f.id
+             LEFT JOIN {$wpdb->users} u ON u.ID=f.user_id
+             WHERE f.event_year=%d GROUP BY f.id ORDER BY like_count DESC LIMIT 1",
+            $event_year
+        ) );
+        $stats['per_hour'] = $wpdb->get_results( $wpdb->prepare(
+            "SELECT HOUR(uploaded_at) as hour, COUNT(*) as count
+             FROM {$fotos_table} WHERE event_year=%d GROUP BY HOUR(uploaded_at) ORDER BY hour ASC",
+            $event_year
+        ) );
+    }
+
+    $page_url = admin_url( 'admin.php?page=oemm-xxvi-admin' );
+    ?>
+    <div class="wrap">
+    <h1 style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:28px">🏍️</span> ÖMM XXVI — Admin
+    </h1>
+
+    <!-- TABS -->
+    <nav class="nav-tab-wrapper" style="margin-bottom:20px">
+        <a href="<?php echo esc_url(add_query_arg('tab','settings',$page_url)); ?>" class="nav-tab <?php echo $tab==='settings'?'nav-tab-active':''; ?>">⚙️ Einstellungen</a>
+        <a href="<?php echo esc_url(add_query_arg('tab','stats',$page_url)); ?>" class="nav-tab <?php echo $tab==='stats'?'nav-tab-active':''; ?>">📊 Statistiken</a>
+        <a href="<?php echo esc_url(add_query_arg('tab','users',$page_url)); ?>" class="nav-tab <?php echo $tab==='users'?'nav-tab-active':''; ?>">👥 Teilnehmer</a>
+        <a href="<?php echo esc_url(add_query_arg('tab','diagnose',$page_url)); ?>" class="nav-tab <?php echo $tab==='diagnose'?'nav-tab-active':''; ?>">🔧 Diagnose</a>
+    </nav>
+
+    <?php if ( $tab === 'settings' ) : ?>
+    <!-- ==================== EINSTELLUNGEN ==================== -->
+    <form method="post">
+        <?php wp_nonce_field( 'oemm_save_settings', 'oemm_settings_nonce' ); ?>
+        <table class="form-table" style="max-width:700px">
+            <tr>
+                <th style="width:220px">📷 Fotobox API Key</th>
+                <td>
+                    <code style="background:#f0f0f0;padding:6px 12px;border-radius:4px;font-size:13px;display:inline-block;margin-bottom:8px;word-break:break-all">
+                        <?php echo $api_key ? esc_html($api_key) : '<em style="color:#999">Noch nicht generiert</em>'; ?>
+                    </code><br>
+                    <label><input type="checkbox" name="oemm_regen_key" value="1">
+                    <?php echo $api_key ? 'API Key neu generieren (alter Key wird ungültig!)' : 'API Key jetzt generieren'; ?></label>
+                    <p class="description">Wird im Raspberry Pi Script als <code>X-OEMM-Foto-Key</code> Header verwendet.</p>
+                </td>
+            </tr>
+            <tr>
+                <th>📅 ZIP verfügbar ab</th>
+                <td>
+                    <input type="date" name="oemm_zip_available_date"
+                           value="<?php echo esc_attr($zip_date); ?>"
+                           style="font-size:14px;padding:6px 10px">
+                    <p class="description">Ab diesem Datum ist der ZIP-Download für Teilnehmer aktiv. Leer lassen = nie.</p>
+                </td>
+            </tr>
+            <tr>
+                <th>🖼️ Öffentliches Album aktiv</th>
+                <td>
+                    <label>
+                        <input type="checkbox" name="oemm_album_active" value="1" <?php checked($album_active,'1'); ?>>
+                        Album für Teilnehmer sichtbar schalten
+                    </label>
+                    <p class="description">Nur Teilnehmer des aktuellen Event-Jahres (<?php echo $event_year; ?>) können das Album sehen.</p>
+                </td>
+            </tr>
+        </table>
+        <p><input type="submit" class="button button-primary button-large" value="💾 Einstellungen speichern"></p>
+    </form>
+
+    <?php elseif ( $tab === 'stats' ) : ?>
+    <!-- ==================== STATISTIKEN ==================== -->
+    <h2>📊 Foto-Statistiken ÖMM <?php echo $event_year; ?></h2>
+    <?php if ( ! $tables_exist ) : ?>
+        <div class="notice notice-warning"><p>Foto-Tabellen noch nicht angelegt. Plugin neu aktivieren.</p></div>
+    <?php else : ?>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:30px">
+        <?php
+        $stat_boxes = [
+            ['📸', 'Fotos gesamt', $stats['total'], '#0073aa'],
+            ['🌍', 'Öffentlich', $stats['public'], '#00a32a'],
+            ['❤️', 'Likes gesamt', $stats['likes'], '#d63638'],
+            ['📱', 'App-QR', $stats['app'], '#8b5cf6'],
+            ['🗒️', 'Papier-QR', $stats['paper'], '#f59e0b'],
+            ['📊', 'Ø Likes/Foto', $stats['total'] > 0 ? round($stats['likes']/$stats['total'],1) : 0, '#10b981'],
+        ];
+        foreach ($stat_boxes as [$icon,$label,$val,$color]) : ?>
+        <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;text-align:center;border-top:3px solid <?php echo $color; ?>">
+            <div style="font-size:24px"><?php echo $icon; ?></div>
+            <div style="font-size:28px;font-weight:700;color:<?php echo $color; ?>;margin:4px 0"><?php echo esc_html($val); ?></div>
+            <div style="font-size:12px;color:#666"><?php echo esc_html($label); ?></div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+
+    <?php if ( ! empty($stats['top_foto']) && $stats['top_foto']->like_count > 0 ) : ?>
+    <h3>🏆 Meistgeliktes Foto</h3>
+    <p><strong><?php echo esc_html($stats['top_foto']->display_name); ?></strong> — Foto #<?php echo $stats['top_foto']->id; ?> mit <?php echo $stats['top_foto']->like_count; ?> Likes</p>
+    <?php endif; ?>
+
+    <?php if ( ! empty($stats['per_hour']) ) : ?>
+    <h3>⏰ Uploads nach Uhrzeit</h3>
+    <table class="widefat striped" style="max-width:500px">
+        <thead><tr><th>Stunde</th><th>Fotos</th><th>Balken</th></tr></thead>
+        <tbody>
+        <?php $max_h = max(array_column((array)$stats['per_hour'],'count')); foreach ($stats['per_hour'] as $h) : ?>
+        <tr>
+            <td><?php echo str_pad($h->hour,2,'0',STR_PAD_LEFT); ?>:00</td>
+            <td><?php echo $h->count; ?></td>
+            <td><div style="background:#0073aa;height:16px;border-radius:3px;width:<?php echo round($h->count/$max_h*200); ?>px"></div></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
+
+    <?php endif; ?>
+
+    <?php elseif ( $tab === 'users' ) : ?>
+    <!-- ==================== TEILNEHMER ==================== -->
+    <h2>👥 Teilnehmer ÖMM <?php echo $event_year; ?></h2>
+    <?php if ( ! $tables_exist ) : ?>
+        <div class="notice notice-warning"><p>Foto-Tabellen noch nicht angelegt.</p></div>
+    <?php elseif ( empty($stats['top_users']) ) : ?>
+        <p style="color:#666">Noch keine Fotos hochgeladen.</p>
+    <?php else : ?>
+    <table class="widefat striped">
+        <thead><tr><th>#</th><th>Teilnehmer</th><th>Fotos</th><th>Öffentlich</th><th>Likes erhalten</th></tr></thead>
+        <tbody>
+        <?php foreach ($stats['top_users'] as $i => $u) : ?>
+        <tr>
+            <td><?php echo $i+1; ?></td>
+            <td><?php echo esc_html($u->display_name ?: 'User #'.$u->user_id); ?></td>
+            <td><?php echo $u->foto_count; ?></td>
+            <td><?php echo $u->public_count; ?></td>
+            <td><?php echo $u->like_count; ?></td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
+
+    <?php elseif ( $tab === 'diagnose' ) : ?>
+    <!-- ==================== DIAGNOSE ==================== -->
+    <h2>🔧 Diagnose</h2>
+    <pre style="background:#f0f0f0;padding:20px;font-size:11px;overflow:auto;max-height:70vh;border-radius:4px">
+<?php
+    // Benutzer mit HA
     echo "=== BENUTZER MIT HA-UNTERSCHRIFT ===\n";
     $users = $wpdb->get_results(
         "SELECT u.ID, u.user_login,
                 MAX(CASE WHEN m.meta_key='_oemm_ha_signed_ts' THEN m.meta_value END) as signed_ts,
                 MAX(CASE WHEN m.meta_key='_oemm_startnumber'  THEN m.meta_value END) as startnr,
-                MAX(CASE WHEN m.meta_key='_oemm_ha_dl_file'   THEN m.meta_value END) as dl_file,
-                MAX(CASE WHEN m.meta_key='_oemm_ha_dl_url'    THEN m.meta_value END) as dl_url
+                MAX(CASE WHEN m.meta_key='_oemm_ha_dl_file'   THEN m.meta_value END) as dl_file
          FROM {$wpdb->users} u JOIN {$wpdb->usermeta} m ON u.ID=m.user_id
-         WHERE m.meta_key IN ('_oemm_ha_signed_ts','_oemm_startnumber','_oemm_ha_dl_file','_oemm_ha_dl_url')
-         GROUP BY u.ID"
+         WHERE m.meta_key IN ('_oemm_ha_signed_ts','_oemm_startnumber','_oemm_ha_dl_file')
+         GROUP BY u.ID ORDER BY u.ID"
     );
     foreach ($users as $u) {
-        $fok = $u->dl_file && file_exists($u->dl_file) ? 'OK ('.filesize($u->dl_file).'B)' : 'FEHLT';
-        echo "User #{$u->ID} ({$u->user_login}) signed={$u->signed_ts} startnr=" . ($u->startnr?:'-') . " pdf={$fok}\n";
-        echo "  DL: {$u->dl_url}\n";
-        // PDF neu generieren Button
-        echo "  <a href='" . admin_url('admin.php?page=oemm-xxvi-admin&regen='.$u->ID) . "' style='color:blue'>PDF neu generieren</a>\n\n";
+        $fok = $u->dl_file && file_exists($u->dl_file) ? 'OK' : 'FEHLT';
+        $regen_url = wp_nonce_url( add_query_arg(['tab'=>'diagnose','regen'=>$u->ID], $page_url), 'oemm_regen_'.$u->ID );
+        echo "User #{$u->ID} ({$u->user_login}) signed={$u->signed_ts} pdf={$fok} ";
+        echo "<a href='" . esc_url($regen_url) . "'>PDF neu</a>\n";
     }
 
-    // PDF Regenerieren
-    if ( ! empty($_GET['regen']) ) {
-        $uid = absint($_GET['regen']);
-        $u2  = get_user_by('id', $uid);
-        if ($u2) {
-            $fn  = trim($u2->first_name.' '.$u2->last_name) ?: $u2->display_name;
-            $ts  = get_user_meta($uid,'_oemm_ha_signed_ts',true) ?: date('d.m.Y H:i:s');
-            $sig = get_user_meta($uid,'_oemm_ha_sig_png',true) ?: '';
-            $dir = trailingslashit(wp_upload_dir()['basedir']).'oemm-agreements/';
-            wp_mkdir_p($dir);
-            $fp  = $dir.'ha-'.$uid.'.pdf';
-            oemm_xxvi_generate_pdf($fp, $fn, $u2->user_login, $ts, $sig);
-            $dlurl = add_query_arg(['oemm_dl'=>1,'uid'=>$uid,'token'=>hash('sha256',AUTH_KEY.$uid.basename($fp))],home_url('/'));
-            update_user_meta($uid,'_oemm_ha_dl_file',$fp);
-            update_user_meta($uid,'_oemm_ha_dl_url',$dlurl);
-            $sz = file_exists($fp) ? filesize($fp) : 0;
-            echo "=== PDF REGENERIERT: {$fn} | {$sz} Bytes ===\n";
-            echo "DL-URL: <a href='{$dlurl}' target='_blank'>{$dlurl}</a>\n\n";
-        }
-    }
-
-    // Relevante Tabellen
-    echo "\n=== DB-TABELLEN (omm/oemm/startl) ===\n";
+    // DB Tabellen
+    echo "\n=== PLUGIN-TABELLEN ===\n";
     $all = $wpdb->get_col('SHOW TABLES');
     $rel = array_filter($all, fn($t) => preg_match('/(startl|omm|oemm|marathon)/i',$t));
-    if (empty($rel)) { echo 'Keine omm-Tabellen.\n'; }
     foreach ($rel as $table) {
-        echo "\nTabelle: $table\n";
-        $cols = $wpdb->get_results("DESCRIBE `$table`");
-        foreach ($cols as $c) echo "  {$c->Field} ({$c->Type})\n";
-        $rows = $wpdb->get_results("SELECT * FROM `$table` LIMIT 3", ARRAY_A);
-        foreach ($rows as $row) {
-            foreach ($row as $k=>$v) echo "  $k = ".substr((string)$v,0,80)."\n";
-            echo "  ---\n";
-        }
+        $count = $wpdb->get_var("SELECT COUNT(*) FROM `{$table}`");
+        echo "{$table}: {$count} Einträge\n";
     }
 
-    echo '</pre></div>';
+    // Settings
+    echo "\n=== SETTINGS ===\n";
+    $opts = ['oemm_event_year','oemm_foto_api_key','oemm_zip_available_date','oemm_album_active','oemm_app_url'];
+    foreach ($opts as $o) echo "{$o} = " . get_option($o,'(leer)') . "\n";
+
+    // Storage Check
+    echo "\n=== STORAGE ===\n";
+    $upload  = wp_upload_dir();
+    $fotosdir = trailingslashit($upload['basedir']) . 'oemm-fotos';
+    echo "Fotos-Root: {$fotosdir}\n";
+    echo "Existiert: " . (is_dir($fotosdir) ? 'JA' : 'NEIN') . "\n";
+    echo ".htaccess: " . (file_exists($fotosdir.'/.htaccess') ? 'OK' : 'FEHLT') . "\n";
+    if (is_dir($fotosdir)) {
+        $years = glob($fotosdir.'/*', GLOB_ONLYDIR);
+        foreach ($years as $y) {
+            $users_dirs = glob($y.'/*', GLOB_ONLYDIR);
+            $file_count = 0;
+            foreach ($users_dirs as $ud) $file_count += count(glob($ud.'/*.jpg')) + count(glob($ud.'/*.png'));
+            echo basename($y) . ": " . count($users_dirs) . " User-Ordner, {$file_count} Dateien\n";
+        }
+    }
+?>
+    </pre>
+    <?php endif; ?>
+    </div>
+    <?php
 }
 
 add_action( 'admin_init', 'oemm_xxvi_admin_diagnose' );
@@ -888,7 +1693,7 @@ function oemm_xxvi_full_width_template( $template ) {
         return OEMM_XXVI_PATH . 'views/ha-standalone.php';
     }
     // Alle anderen ÖMM-Seiten: Dashboard-Layout mit Sidebar
-    $oemm_pages = [ 'omm-dashboard', 'omm-bestellungen', 'omm-downloads', 'omm-adresse', 'omm-kontodetails', 'omm-packliste', 'omm-freundebuch', 'omm-ergebnisse', 'omm-fotos' ];
+    $oemm_pages = [ 'omm-dashboard', 'omm-bestellungen', 'omm-downloads', 'omm-adresse', 'omm-kontodetails', 'omm-packliste', 'omm-freundebuch', 'omm-ergebnisse', 'omm-fotos', 'omm-album', 'view-order' ];
     foreach ( $oemm_pages as $page ) {
         if ( strpos( $uri, $page ) !== false ) {
             return OEMM_XXVI_PATH . 'views/full-width.php';

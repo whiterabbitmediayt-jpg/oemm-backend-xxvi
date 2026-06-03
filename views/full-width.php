@@ -17,6 +17,7 @@ $nav = [
     'omm-freundebuch'  => ['👥', 'Freundebuch'],
     'omm-ergebnisse'   => ['🏁', 'Ergebnisse'],
     'omm-fotos'        => ['📷', 'Meine Fotos'],
+    'omm-album'        => ['🖼️', 'Öffentliches Album'],
     'omm-downloads'    => ['⬇',  'Downloads'],
     'omm-adresse'      => ['📍', 'Adresse'],
     'omm-kontodetails' => ['⚙',  'Kontodetails'],
@@ -60,6 +61,10 @@ body.oemm-account-page { padding-top:0!important; }
   grid-template-columns: 260px 1fr;
   gap: 28px;
   align-items: start;
+}
+#oemm-main-content {
+  overflow: visible;
+  min-width: 0;
 }
 
 /* LOGO BLOCK */
@@ -362,13 +367,32 @@ body.oemm-account-page { padding-top:0!important; }
     </div><!-- /sidebar -->
 
     <!-- ===== MAIN CONTENT ===== -->
-    <div>
+    <div id="oemm-main-content">
 
       <!-- PAGE HEADER mit Countdown rechts -->
       <div class="oemm-header-row">
         <div class="oemm-page-title">
+          <?php
+          $is_view_order = strpos($uri, 'view-order') !== false;
+          if ( $is_view_order ) :
+            // Bestellnummer aus URL holen
+            preg_match('/view-order\/([0-9]+)/', $uri, $m);
+            $vorder_id = $m[1] ?? '';
+            ?>
+            <?php
+            // Bestellnummer für Titel aus Order-Objekt holen (sicherer)
+            $vo_order = $vorder_id ? wc_get_order((int)$vorder_id) : null;
+            $vo_num   = $vo_order ? $vo_order->get_order_number() : $vorder_id;
+            ?>
+            <h1>Bestell-Historie</h1>
+            <p style="font-size:13px;color:rgba(255,255,255,.4);margin:0">
+              Bestellung #<?php echo esc_html($vo_num); ?> &nbsp;·&nbsp;
+              <a href="<?php echo esc_url(wc_get_account_endpoint_url('omm-bestellungen')); ?>" style="color:rgba(255,255,255,.35);text-decoration:none">← Zurück zu Bestellungen</a>
+            </p>
+          <?php else : ?>
           <h1>Mein ÖMV Account</h1>
           <p>Willkommen zurück, <strong style="color:rgba(255,255,255,.65)"><?php echo esc_html($user->first_name ?: $fullname); ?></strong></p>
+          <?php endif; ?>
         </div>
         <!-- COUNTDOWN (Desktop rechts, Mobile volle Breite) -->
         <div class="oemm-countdown-inline">
@@ -406,6 +430,7 @@ body.oemm-account-page { padding-top:0!important; }
       elseif  ( strpos($uri, 'omm-freundebuch')    !== false ) do_action('woocommerce_account_omm-freundebuch_endpoint');
       elseif  ( strpos($uri, 'omm-ergebnisse')     !== false ) do_action('woocommerce_account_omm-ergebnisse_endpoint');
       elseif  ( strpos($uri, 'omm-fotos')          !== false ) do_action('woocommerce_account_omm-fotos_endpoint');
+      elseif  ( strpos($uri, 'view-order')         !== false ) { include OEMM_XXVI_PATH . 'views/view-order.php'; }
       ?>
     </div>
 
