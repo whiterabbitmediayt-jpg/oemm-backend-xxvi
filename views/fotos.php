@@ -77,8 +77,16 @@ $fotos_json = array_map( function( $f ) {
 .omm-drop-zone.drag-over{border-color:#f0c040;background:rgba(240,192,64,.05);color:rgba(255,255,255,.7)}
 .omm-drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .omm-drop-zone .drop-icon{font-size:32px;margin-bottom:8px}
-#ommPreviewGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.1)}
+#ommPreviewGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.1);transition:opacity .3s}
 #ommPreviewGrid .omm-prev-err{width:100%;aspect-ratio:1;background:rgba(239,68,68,.15);border-radius:6px;border:1px solid rgba(239,68,68,.3);display:flex;align-items:center;justify-content:center;font-size:10px;color:#f87171;text-align:center;padding:4px}
+/* Upload-Animationen */
+.omm-prev-uploading{position:relative;border-radius:6px;overflow:hidden}
+.omm-prev-uploading::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(240,192,64,.5) 50%,transparent 100%);background-size:200% 100%;animation:ommShimmer 1s infinite linear;border-radius:6px}
+@keyframes ommShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.omm-prev-done{position:relative;border-radius:6px;overflow:hidden}
+.omm-prev-done::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;background:rgba(74,222,128,.55);animation:ommCheckPop .35s cubic-bezier(.34,1.56,.64,1) forwards}
+@keyframes ommCheckPop{0%{opacity:0;transform:scale(.4)}100%{opacity:1;transform:scale(1)}}
+.omm-prev-fail::after{content:'❌';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:rgba(239,68,68,.55)}
 
 .omm-public-toggle{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;user-select:none}
 .omm-public-toggle input{width:18px;height:18px;cursor:pointer;accent-color:#f0c040}
@@ -788,6 +796,10 @@ $fotos_json = array_map( function( $f ) {
             uploadMsg.textContent = 'Foto ' + (idx+1) + ' von ' + total + ' — ' + file.name;
             uploadMsg.style.color = 'rgba(255,255,255,.5)';
 
+            // Shimmer-Animation auf aktuellem Thumbnail
+            const curThumb = previewGrid.querySelectorAll('img')[idx];
+            if (curThumb) curThumb.classList.add('omm-prev-uploading');
+
             const fd = new FormData();
             fd.append('datei', file);
             fd.append('is_public', isPublic);
@@ -832,10 +844,10 @@ $fotos_json = array_map( function( $f ) {
                         }
                         // Vorschau-Thumbnail als erledigt markieren
                         const prevImg = previewGrid.querySelectorAll('img')[idx];
-                        if (prevImg) prevImg.style.outline = '2px solid #4ade80';
+                        if (prevImg) { prevImg.classList.remove('omm-prev-uploading'); prevImg.classList.add('omm-prev-done'); }
                     } else {
                         const prevImg = previewGrid.querySelectorAll('img')[idx];
-                        if (prevImg) { prevImg.style.outline = '2px solid #f87171'; prevImg.style.opacity='.4'; }
+                        if (prevImg) { prevImg.classList.remove('omm-prev-uploading'); prevImg.classList.add('omm-prev-fail'); }
                     }
                 } catch(e) {}
                 idx++;
