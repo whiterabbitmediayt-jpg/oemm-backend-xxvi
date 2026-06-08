@@ -29,6 +29,11 @@ $nonce_val = wp_create_nonce( 'wp_rest' );
 
 // Fotos als JSON fuer JS
 $fotos_json = array_map( function( $f ) {
+    $mime  = '';
+    $fname = $f->filename ?? '';
+    if ( preg_match( '/\.(mp4|mov|webm|avi)$/i', $fname ) ) {
+        $mime = 'video';
+    }
     return [
         'id'        => (int) $f->id,
         'url'       => oemm_xxvi_fotos_get_serve_url( (int) $f->id, (int) $f->user_id ),
@@ -36,6 +41,7 @@ $fotos_json = array_map( function( $f ) {
         'like_count'=> (int) $f->like_count,
         'user_liked'=> (int) $f->user_liked,
         'shot_at'   => $f->shot_at ? date_i18n( 'd.m.Y H:i', strtotime( $f->shot_at ) ) : '',
+        'is_video'  => $mime === 'video' ? 1 : 0,
     ];
 }, $fotos );
 ?>
@@ -58,6 +64,33 @@ $fotos_json = array_map( function( $f ) {
 .omm-btn-delete:hover{background:rgba(239,68,68,.55);color:#fff}
 .omm-btn-download{background:rgba(240,192,64,.15);color:#f0c040;border:1px solid rgba(240,192,64,.25)}
 .omm-btn-download:hover{background:rgba(240,192,64,.35);color:#fff}
+/* Video in Grid */
+.omm-foto-card video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.omm-video-badge{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;font-family:'Oswald',sans-serif;letter-spacing:.3px}
+/* Upload Button */
+.omm-upload-trigger{display:inline-flex;align-items:center;gap:8px;background:rgba(240,192,64,.15);color:#f0c040;border:1px solid rgba(240,192,64,.3);font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;padding:10px 20px;border-radius:10px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;margin-bottom:18px;transition:background .15s}
+.omm-upload-trigger:hover{background:rgba(240,192,64,.3)}
+/* Upload Modal */
+#ommUploadModal{display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.85);align-items:center;justify-content:center}
+#ommUploadModal.open{display:flex}
+#ommUploadBox{background:#1a1a2e;border:1px solid rgba(240,192,64,.25);border-radius:16px;padding:28px 28px 24px;max-width:380px;width:92%}
+#ommUploadBox h3{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:#f0c040;margin:0 0 16px}
+.omm-drop-zone{border:2px dashed rgba(240,192,64,.3);border-radius:12px;padding:30px 20px;text-align:center;cursor:pointer;color:rgba(255,255,255,.4);font-size:13px;transition:border-color .2s,background .2s;margin-bottom:14px;position:relative}
+.omm-drop-zone.drag-over{border-color:#f0c040;background:rgba(240,192,64,.05);color:rgba(255,255,255,.7)}
+.omm-drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.omm-drop-zone .drop-icon{font-size:32px;margin-bottom:8px}
+.omm-drop-zone .drop-preview{max-width:100%;max-height:140px;border-radius:8px;margin-top:10px;display:none}
+.omm-drop-zone .drop-preview-video{max-width:100%;max-height:140px;border-radius:8px;margin-top:10px;display:none}
+.omm-public-toggle{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;user-select:none}
+.omm-public-toggle input{width:18px;height:18px;cursor:pointer;accent-color:#f0c040}
+.omm-upload-progress{display:none;height:6px;background:rgba(255,255,255,.1);border-radius:3px;margin-bottom:14px;overflow:hidden}
+.omm-upload-progress-bar{height:100%;background:#f0c040;width:0;transition:width .3s;border-radius:3px}
+.omm-upload-btns{display:flex;gap:10px}
+.omm-upload-send{flex:1;background:#f0c040;color:#1a1a2e;border:none;font-family:'Oswald',sans-serif;font-size:14px;font-weight:800;padding:12px;border-radius:8px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px}
+.omm-upload-send:hover{background:#e5b530}
+.omm-upload-send:disabled{background:rgba(240,192,64,.3);cursor:not-allowed}
+.omm-upload-cancel{background:rgba(255,255,255,.08);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.15);font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;padding:12px 18px;border-radius:8px;cursor:pointer}
+.omm-upload-cancel:hover{background:rgba(255,255,255,.15)}
 /* Delete Confirm Overlay */
 #ommDeleteModal{display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.8);align-items:center;justify-content:center}
 #ommDeleteModal.open{display:flex}
@@ -102,8 +135,37 @@ $fotos_json = array_map( function( $f ) {
 #ommLbClose:hover{background:rgba(255,255,255,.25)}
 </style>
 
-<h2 style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:6px">📷 Meine Fotos</h2>
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+    <h2 style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:#fff;margin:0">📷 Meine Fotos</h2>
+    <button class="omm-upload-trigger" id="ommUploadOpen">📤 Eigenes hochladen</button>
+</div>
 <p style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:18px">Deine Fotobox-Bilder vom ÖMM <?php echo esc_html( $event_year ); ?> — Foto antippen zum Durchswipen</p>
+
+<!-- UPLOAD MODAL -->
+<div id="ommUploadModal" role="dialog" aria-modal="true">
+    <div id="ommUploadBox">
+        <h3>📤 Foto / Video hochladen</h3>
+        <div class="omm-drop-zone" id="ommDropZone">
+            <input type="file" id="ommUploadFile" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" />
+            <div class="drop-icon">🖼️</div>
+            <div>Datei hierher ziehen oder tippen</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP · MP4 · MOV · WEBM — max. 100 MB</div>
+            <img class="drop-preview" id="ommDropPreview" src="" alt="" />
+            <video class="drop-preview-video" id="ommDropPreviewVideo" muted playsinline></video>
+        </div>
+        <label class="omm-public-toggle">
+            <input type="checkbox" id="ommUploadPublic" /> Sofort öffentlich sichtbar (Community-Album)
+        </label>
+        <div class="omm-upload-progress" id="ommUploadProgress">
+            <div class="omm-upload-progress-bar" id="ommUploadBar"></div>
+        </div>
+        <div id="ommUploadMsg" style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px;min-height:16px"></div>
+        <div class="omm-upload-btns">
+            <button class="omm-upload-cancel" id="ommUploadCancel">Abbrechen</button>
+            <button class="omm-upload-send" id="ommUploadSend" disabled>Hochladen</button>
+        </div>
+    </div>
+</div>
 
 <?php if ( ! $zip_available ) : ?>
 <div class="omm-zip-hint">
@@ -134,8 +196,16 @@ $fotos_json = array_map( function( $f ) {
     $user_liked = (int) $foto->user_liked;
     $shot_label = $foto->shot_at ? date_i18n( 'd.m.Y H:i', strtotime( $foto->shot_at ) ) : '';
 ?>
-<div class="omm-foto-card" data-foto-id="<?php echo (int)$foto->id; ?>" data-idx="<?php echo $idx; ?>" data-public="<?php echo $is_public; ?>">
+<?php
+    $is_video_file = (bool) preg_match( '/\.(mp4|mov|webm|avi)$/i', $foto->filename ?? '' );
+?>
+<div class="omm-foto-card" data-foto-id="<?php echo (int)$foto->id; ?>" data-idx="<?php echo $idx; ?>" data-public="<?php echo $is_public; ?>" data-is-video="<?php echo $is_video_file ? 1 : 0; ?>">
+<?php if ( $is_video_file ) : ?>
+    <video src="<?php echo esc_url( $serve_url ); ?>" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>
+    <div class="omm-video-badge">▶ VIDEO</div>
+<?php else : ?>
     <img src="<?php echo esc_url( $serve_url ); ?>" alt="ÖMM Foto" loading="<?php echo $idx < 4 ? 'eager' : 'lazy'; ?>" />
+<?php endif; ?>
 
     <?php if ( $is_public ) : ?>
     <div class="omm-foto-badge-pub">ÖFFENTLICH</div>
@@ -598,6 +668,204 @@ $fotos_json = array_map( function( $f ) {
             const fotoId = parseInt(this.dataset.fotoId);
             openDeleteModal(fotoId, null);
         });
+    });
+
+    // ============================================================
+    // USER UPLOAD
+    // ============================================================
+    const uploadModal   = document.getElementById('ommUploadModal');
+    const uploadOpen    = document.getElementById('ommUploadOpen');
+    const uploadCancel  = document.getElementById('ommUploadCancel');
+    const uploadSend    = document.getElementById('ommUploadSend');
+    const uploadFile    = document.getElementById('ommUploadFile');
+    const uploadPublic  = document.getElementById('ommUploadPublic');
+    const dropZone      = document.getElementById('ommDropZone');
+    const dropPreview   = document.getElementById('ommDropPreview');
+    const dropPreviewV  = document.getElementById('ommDropPreviewVideo');
+    const uploadMsg     = document.getElementById('ommUploadMsg');
+    const uploadProg    = document.getElementById('ommUploadProgress');
+    const uploadBar     = document.getElementById('ommUploadBar');
+
+    uploadOpen.addEventListener('click', function(){
+        uploadModal.classList.add('open');
+    });
+    function closeUploadModal() {
+        uploadModal.classList.remove('open');
+        uploadFile.value = '';
+        dropPreview.style.display = 'none';
+        dropPreviewV.style.display = 'none';
+        dropPreview.src = '';
+        dropPreviewV.src = '';
+        uploadSend.disabled = true;
+        uploadMsg.textContent = '';
+        uploadProg.style.display = 'none';
+        uploadBar.style.width = '0';
+        uploadPublic.checked = false;
+    }
+    uploadCancel.addEventListener('click', closeUploadModal);
+    uploadModal.addEventListener('click', function(e){ if(e.target === uploadModal) closeUploadModal(); });
+
+    function handleFileSelect(file) {
+        if (!file) return;
+        const maxMB = 100;
+        if (file.size > maxMB * 1024 * 1024) {
+            uploadMsg.textContent = 'Datei zu groß (max ' + maxMB + ' MB)';
+            uploadMsg.style.color = '#f87171';
+            uploadSend.disabled = true;
+            return;
+        }
+        uploadMsg.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
+        uploadMsg.style.color = 'rgba(255,255,255,.5)';
+        uploadSend.disabled = false;
+        // Preview
+        const isVideo = file.type.startsWith('video/');
+        if (isVideo) {
+            dropPreview.style.display = 'none';
+            dropPreviewV.src = URL.createObjectURL(file);
+            dropPreviewV.style.display = 'block';
+        } else {
+            dropPreviewV.style.display = 'none';
+            const reader = new FileReader();
+            reader.onload = function(e){ dropPreview.src = e.target.result; dropPreview.style.display = 'block'; };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    uploadFile.addEventListener('change', function(){ handleFileSelect(this.files[0]); });
+
+    // Drag & Drop
+    dropZone.addEventListener('dragover', function(e){ e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', function(){ dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', function(e){
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const f = e.dataTransfer.files[0];
+        if (f) { uploadFile.files = e.dataTransfer.files; handleFileSelect(f); }
+    });
+
+    uploadSend.addEventListener('click', function(){
+        const file = uploadFile.files[0];
+        if (!file) return;
+
+        uploadSend.disabled = true;
+        uploadSend.textContent = 'Lädt...';
+        uploadMsg.textContent = '';
+        uploadProg.style.display = 'block';
+        uploadBar.style.width = '0';
+
+        const fd = new FormData();
+        fd.append('datei', file);
+        fd.append('is_public', uploadPublic.checked ? '1' : '0');
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', REST + '/foto/user-upload');
+        xhr.setRequestHeader('X-WP-Nonce', NONCE);
+
+        xhr.upload.addEventListener('progress', function(e){
+            if (e.lengthComputable) {
+                const pct = Math.round(e.loaded / e.total * 100);
+                uploadBar.style.width = pct + '%';
+                uploadMsg.textContent = pct + '%';
+                uploadMsg.style.color = 'rgba(255,255,255,.5)';
+            }
+        });
+
+        xhr.addEventListener('load', function(){
+            uploadSend.disabled = false;
+            uploadSend.textContent = 'Hochladen';
+            try {
+                const d = JSON.parse(xhr.responseText);
+                if (d.success) {
+                    uploadBar.style.width = '100%';
+                    uploadMsg.textContent = '✅ Hochgeladen!';
+                    uploadMsg.style.color = '#4ade80';
+
+                    // Neues Foto in FOTOS-Array vorne einfuegen
+                    const newF = {
+                        id: d.foto_id,
+                        url: d.url,
+                        is_public: d.is_public,
+                        like_count: 0,
+                        user_liked: 0,
+                        shot_at: '',
+                        is_video: d.is_video ? 1 : 0,
+                    };
+                    FOTOS.unshift(newF);
+
+                    // Neue Karte oben im Grid einfügen
+                    const grid = document.getElementById('omm-fotos-grid');
+                    if (grid) {
+                        const card = document.createElement('div');
+                        card.className = 'omm-foto-card';
+                        card.dataset.fotoId = d.foto_id;
+                        card.dataset.idx = '0';
+                        card.dataset.public = d.is_public;
+                        card.dataset.isVideo = d.is_video ? '1' : '0';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(.9)';
+                        card.style.transition = 'opacity .3s,transform .3s';
+
+                        if (d.is_video) {
+                            card.innerHTML = '<video src="'+d.url+'" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>'
+                                + '<div class="omm-video-badge">▶ VIDEO</div>';
+                        } else {
+                            card.innerHTML = '<img src="'+d.url+'" alt="ÖMM Foto" />';
+                        }
+                        if (d.is_public) {
+                            const badge = document.createElement('div');
+                            badge.className = 'omm-foto-badge-pub';
+                            badge.textContent = 'ÖFFENTLICH';
+                            card.appendChild(badge);
+                        }
+
+                        // Overlay mit Buttons
+                        const overlay = document.createElement('div');
+                        overlay.className = 'omm-foto-overlay';
+                        overlay.innerHTML =
+                            '<button class="omm-foto-btn '+(d.is_public?'omm-btn-public':'omm-btn-private')+' omm-toggle-public" data-foto-id="'+d.foto_id+'" data-public="'+d.is_public+'">'+(d.is_public?'🌍':'🔒')+'</button>'
+                            +'<button class="omm-foto-btn omm-btn-like omm-toggle-like" data-foto-id="'+d.foto_id+'">❤️ <span class="like-count">0</span></button>'
+                            +'<a class="omm-foto-btn omm-btn-download omm-dl-foto" href="'+d.url+'&dl=1" download onclick="event.stopPropagation()">⬇️</a>'
+                            +'<button class="omm-foto-btn omm-btn-delete omm-delete-foto" data-foto-id="'+d.foto_id+'" title="Foto löschen">🗑️</button>';
+                        card.appendChild(overlay);
+
+                        // Click-Handler für Lightbox rebuild
+                        card.addEventListener('click', function(){
+                            lbBuilt = false; lbTrack.innerHTML=''; lbDots.innerHTML=''; lbAct.innerHTML='';
+                            openAt(0);
+                        });
+
+                        grid.insertBefore(card, grid.firstChild);
+                        requestAnimationFrame(function(){
+                            requestAnimationFrame(function(){
+                                card.style.opacity = '1';
+                                card.style.transform = 'scale(1)';
+                            });
+                        });
+                    }
+
+                    // Lightbox rebuild erzwingen
+                    lbBuilt = false;
+
+                    setTimeout(closeUploadModal, 1500);
+                    updateFotoCount();
+                } else {
+                    uploadMsg.textContent = '❌ ' + (d.message || 'Fehler beim Hochladen');
+                    uploadMsg.style.color = '#f87171';
+                }
+            } catch(e) {
+                uploadMsg.textContent = '❌ Serverfehler';
+                uploadMsg.style.color = '#f87171';
+            }
+        });
+
+        xhr.addEventListener('error', function(){
+            uploadSend.disabled = false;
+            uploadSend.textContent = 'Hochladen';
+            uploadMsg.textContent = '❌ Netzwerkfehler';
+            uploadMsg.style.color = '#f87171';
+        });
+
+        xhr.send(fd);
     });
 
     function updateFotoCount() {

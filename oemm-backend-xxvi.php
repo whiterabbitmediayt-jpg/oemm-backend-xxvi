@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.19
+ * Version:     2.3.20
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.19' );
+define( 'OEMM_XXVI_VERSION', '2.3.20' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -322,17 +322,55 @@ function oemm_xxvi_fotos_serve(): void {
     $filepath = ABSPATH . 'wp-content/uploads/' . ltrim( $foto->filepath, '/' );
     if ( ! file_exists( $filepath ) ) wp_die( 'Datei nicht gefunden.', 404 );
 
-    $mime = mime_content_type( $filepath ) ?: 'image/jpeg';
-    $ext  = ( $mime === 'image/png' ) ? 'png' : 'jpg';
+    $mime     = mime_content_type( $filepath ) ?: 'image/jpeg';
+    $ext_map  = [
+        'image/jpeg' => 'jpg', 'image/jpg' => 'jpg', 'image/png' => 'png',
+        'image/webp' => 'webp', 'video/mp4' => 'mp4', 'video/quicktime' => 'mov',
+        'video/webm' => 'webm', 'video/x-msvideo' => 'avi',
+    ];
+    $ext      = $ext_map[ $mime ] ?? 'bin';
+    $is_video = str_starts_with( $mime, 'video/' );
+    $filesize = filesize( $filepath );
+
     header( 'Content-Type: ' . $mime );
-    header( 'Content-Length: ' . filesize( $filepath ) );
-    header( 'Cache-Control: private, max-age=3600' );
     header( 'X-Content-Type-Options: nosniff' );
-    // &dl=1 => Datei herunterladen statt im Browser anzeigen
+
+    // &dl=1 => Download-Header setzen
     if ( ! empty( $_GET['dl'] ) ) {
-        $dl_name = 'oemm_foto_' . (int) $foto->id . '.' . $ext;
-        header( 'Content-Disposition: attachment; filename="' . $dl_name . '"' );
+        header( 'Content-Disposition: attachment; filename="oemm_foto_' . (int) $foto->id . '.' . $ext . '"' );
+        header( 'Content-Length: ' . $filesize );
+        header( 'Cache-Control: private, no-cache' );
+        readfile( $filepath );
+        exit;
     }
+
+    // Videos: Range-Request-Support fuer mobile Browser
+    if ( $is_video ) {
+        header( 'Accept-Ranges: bytes' );
+        header( 'Cache-Control: private, max-age=3600' );
+        $range = $_SERVER['HTTP_RANGE'] ?? '';
+        if ( $range && preg_match( '/bytes=(\d*)-(\d*)/', $range, $m ) ) {
+            $start = $m[1] !== '' ? (int)$m[1] : 0;
+            $end   = $m[2] !== '' ? (int)$m[2] : $filesize - 1;
+            $end   = min( $end, $filesize - 1 );
+            $length = $end - $start + 1;
+            http_response_code( 206 );
+            header( 'Content-Range: bytes ' . $start . '-' . $end . '/' . $filesize );
+            header( 'Content-Length: ' . $length );
+            $fh = fopen( $filepath, 'rb' );
+            fseek( $fh, $start );
+            echo fread( $fh, $length );
+            fclose( $fh );
+        } else {
+            header( 'Content-Length: ' . $filesize );
+            readfile( $filepath );
+        }
+        exit;
+    }
+
+    // Bilder: normal ausliefern
+    header( 'Content-Length: ' . $filesize );
+    header( 'Cache-Control: private, max-age=3600' );
     readfile( $filepath );
     exit;
 }
@@ -734,6 +772,13 @@ function oemm_xxvi_register_routes() {
         'callback'            => 'oemm_xxvi_rest_foto_delete',
         'permission_callback' => fn() => is_user_logged_in(),
     ] );
+
+    // User-Upload: eingeloggte Teilnehmer koennen eigene Fotos/Videos hochladen
+    register_rest_route( 'oemm-xxvi/v1', '/foto/user-upload', [
+        'methods'             => 'POST',
+        'callback'            => 'oemm_xxvi_rest_foto_user_upload',
+        'permission_callback' => fn() => is_user_logged_in(),
+    ] );
 }
 
 /* ---------------------------------------------------------------
@@ -976,6 +1021,112 @@ function oemm_xxvi_rest_foto_like( WP_REST_Request $req ): WP_REST_Response|WP_E
         'foto_id'    => $foto_id,
         'liked'      => $liked,
         'like_count' => $like_count,
+    ], 200 );
+}
+
+/**
+ * POST /wp-json/oemm-xxvi/v1/foto/user-upload
+ * Eingeloggte Teilnehmer koennen eigene Fotos/Videos hochladen.
+ * Multipart: datei=<file>, is_public=0|1
+ * Max 100 MB (Videos), nur JPEG/PNG/MP4/MOV/WEBM
+ */
+function oemm_xxvi_rest_foto_user_upload( WP_REST_Request $req ): WP_REST_Response|WP_Error {
+    global $wpdb;
+    $user       = wp_get_current_user();
+    $event_year = (int) get_option( 'oemm_event_year', (int) date( 'Y' ) );
+
+    // Muss Teilnehmer sein
+    $is_participant = $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}oemm_participants WHERE customer_id = %d AND event_year = %d LIMIT 1",
+        $user->ID, $event_year
+    ) );
+    if ( ! $is_participant && ! current_user_can( 'manage_options' ) ) {
+        return new WP_Error( 'not_participant', 'Nur Teilnehmer koennen Dateien hochladen.', [ 'status' => 403 ] );
+    }
+
+    // Datei pruefen
+    $files = $req->get_file_params();
+    if ( empty( $files['datei'] ) || $files['datei']['error'] !== UPLOAD_ERR_OK ) {
+        $err_code = $files['datei']['error'] ?? 'no_file';
+        return new WP_Error( 'no_file', 'Keine Datei oder Upload-Fehler (Code: ' . $err_code . ').', [ 'status' => 400 ] );
+    }
+
+    $file     = $files['datei'];
+    $tmp_path = $file['tmp_name'];
+    $filesize = (int) $file['size'];
+    $max_bytes = 100 * 1024 * 1024; // 100 MB
+
+    if ( $filesize > $max_bytes ) {
+        return new WP_Error( 'file_too_large', 'Datei zu gross (max 100 MB).', [ 'status' => 413 ] );
+    }
+
+    $mime = mime_content_type( $tmp_path ) ?: '';
+    $allowed = [
+        'image/jpeg' => 'jpg',
+        'image/jpg'  => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+        'video/mp4'  => 'mp4',
+        'video/quicktime' => 'mov',
+        'video/webm' => 'webm',
+        'video/x-msvideo' => 'avi',
+    ];
+    if ( ! isset( $allowed[ $mime ] ) ) {
+        return new WP_Error( 'invalid_mime', 'Dateityp nicht erlaubt (JPEG/PNG/WEBP/MP4/MOV/WEBM).', [ 'status' => 415 ] );
+    }
+    $ext      = $allowed[ $mime ];
+    $is_video = str_starts_with( $mime, 'video/' );
+
+    $is_public = (int) ( $req->get_param( 'is_public' ) ?? 0 ) === 1 ? 1 : 0;
+
+    // Verzeichnis + Dateiname
+    $dir      = oemm_xxvi_fotos_ensure_dir( $user->ID, $event_year );
+    $filename = 'user_' . date( 'YmdHis' ) . '_' . wp_generate_password( 8, false ) . '.' . $ext;
+    $dest     = $dir . '/' . $filename;
+
+    $upload   = wp_upload_dir();
+    $rel_path = str_replace( trailingslashit( $upload['basedir'] ), '', $dest );
+
+    if ( ! move_uploaded_file( $tmp_path, $dest ) ) {
+        return new WP_Error( 'move_failed', 'Datei konnte nicht gespeichert werden.', [ 'status' => 500 ] );
+    }
+
+    // .htaccess: Videos auch sperren (nur ueber PHP ausliefern)
+    if ( $is_video ) {
+        $htaccess = dirname( $dest ) . '/.htaccess';
+        if ( file_exists( $htaccess ) ) {
+            $rules = file_get_contents( $htaccess );
+            if ( strpos( $rules, 'mp4' ) === false ) {
+                $rules .= "\n<FilesMatch \".\\+\\.(mp4|mov|webm|avi)$\">\n    Require all denied\n</FilesMatch>\n";
+                file_put_contents( $htaccess, $rules );
+            }
+        }
+    }
+
+    $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $wpdb->insert( $fotos_table, [
+        'user_id'       => $user->ID,
+        'event_year'    => $event_year,
+        'filename'      => $filename,
+        'filepath'      => $rel_path,
+        'filesize'      => $filesize,
+        'shot_at'       => current_time( 'mysql' ),
+        'uploaded_at'   => current_time( 'mysql' ),
+        'token_type'    => 'user',
+        'upload_ms'     => 0,
+        'is_public'     => $is_public,
+    ], [ '%d','%d','%s','%s','%d','%s','%s','%s','%d','%d' ] );
+
+    $foto_id  = (int) $wpdb->insert_id;
+    $serve_url = oemm_xxvi_fotos_get_serve_url( $foto_id, $user->ID );
+
+    return new WP_REST_Response( [
+        'success'   => true,
+        'foto_id'   => $foto_id,
+        'url'       => $serve_url,
+        'is_public' => $is_public,
+        'is_video'  => $is_video,
+        'filesize'  => $filesize,
     ], 200 );
 }
 
