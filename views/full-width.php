@@ -695,6 +695,7 @@ function ommCloseMehr(e) {
       elseif  ( strpos($uri, 'omm-ergebnisse')     !== false ) do_action('woocommerce_account_omm-ergebnisse_endpoint');
       elseif  ( strpos($uri, 'omm-fotos')          !== false ) do_action('woocommerce_account_omm-fotos_endpoint');
       elseif  ( strpos($uri, 'omm-album')           !== false ) do_action('woocommerce_account_omm-album_endpoint');
+      elseif  ( strpos($uri, 'omm-ergebnisse')      !== false ) do_action('woocommerce_account_omm-ergebnisse_endpoint');
       elseif  ( strpos($uri, 'view-order')         !== false ) { include OEMM_XXVI_PATH . 'views/view-order.php'; }
       ?>
     </div>

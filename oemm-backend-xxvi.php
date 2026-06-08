@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.26
+ * Version:     2.3.27
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.26' );
+define( 'OEMM_XXVI_VERSION', '2.3.27' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -637,7 +637,7 @@ function oemm_xxvi_placeholder_page( $title, $icon, $desc ) {
 }
 function oemm_xxvi_page_packliste()   { include OEMM_XXVI_PATH . 'views/packliste.php'; }
 function oemm_xxvi_page_freundebuch() { oemm_xxvi_placeholder_page('Freundebuch','👥','Wer fährt noch mit? Das Freundebuch kommt bald.'); }
-function oemm_xxvi_page_ergebnisse()  { oemm_xxvi_placeholder_page('Ergebnisse','🏁','Die Ergebnisliste wird nach dem Event veröffentlicht.'); }
+function oemm_xxvi_page_ergebnisse()  { include OEMM_XXVI_PATH . 'views/ergebnisse.php'; }
 function oemm_xxvi_page_fotos() {
     include OEMM_XXVI_PATH . 'views/fotos.php';
 }
