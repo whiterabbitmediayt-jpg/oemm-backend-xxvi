@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.24
+ * Version:     2.3.25
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.24' );
+define( 'OEMM_XXVI_VERSION', '2.3.25' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -499,6 +499,21 @@ function oemm_xxvi_add_endpoints() {
     add_rewrite_endpoint( 'omm-ergebnisse',     EP_ROOT | EP_PAGES );
     add_rewrite_endpoint( 'omm-fotos',          EP_ROOT | EP_PAGES );
     add_rewrite_endpoint( 'omm-album',          EP_ROOT | EP_PAGES );
+}
+
+// WooCommerce muss die Endpoints in seinen Query-Vars kennen damit
+// woocommerce_account_*_endpoint Hooks korrekt gefeuert werden
+add_filter( 'woocommerce_get_query_vars', 'oemm_xxvi_register_wc_query_vars' );
+function oemm_xxvi_register_wc_query_vars( $vars ) {
+    $endpoints = [
+        'haftungsausschluss', 'omm-dashboard', 'omm-bestellungen', 'omm-downloads',
+        'omm-adresse', 'omm-kontodetails', 'omm-packliste', 'omm-freundebuch',
+        'omm-ergebnisse', 'omm-fotos', 'omm-album',
+    ];
+    foreach ( $endpoints as $ep ) {
+        $vars[ $ep ] = $ep;
+    }
+    return $vars;
 }
 
 /* ---------------------------------------------------------------
