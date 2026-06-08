@@ -9,6 +9,7 @@
 * License:  LGPL                                                               *
 *******************************************************************************/
 
+if ( ! class_exists('tFPDF') ) :
 class tFPDF
 {
 const VERSION = '1.33';
@@ -2368,4 +2369,5 @@ protected function UTF8StringToArray($str) {
 }
 
 }
+endif; // class_exists tFPDF
 ?>
