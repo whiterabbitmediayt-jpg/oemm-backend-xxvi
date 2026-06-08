@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.16
+ * Version:     2.3.17
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.16' );
+define( 'OEMM_XXVI_VERSION', '2.3.17' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -721,6 +721,13 @@ function oemm_xxvi_register_routes() {
         'callback'            => 'oemm_xxvi_rest_foto_like',
         'permission_callback' => fn() => is_user_logged_in(),
     ] );
+
+    // Foto loeschen (eigene Fotos; Admins duerfen alle)
+    register_rest_route( 'oemm-xxvi/v1', '/foto/delete', [
+        'methods'             => 'POST',
+        'callback'            => 'oemm_xxvi_rest_foto_delete',
+        'permission_callback' => fn() => is_user_logged_in(),
+    ] );
 }
 
 /* ---------------------------------------------------------------
@@ -964,6 +971,57 @@ function oemm_xxvi_rest_foto_like( WP_REST_Request $req ): WP_REST_Response|WP_E
         'liked'      => $liked,
         'like_count' => $like_count,
     ], 200 );
+}
+
+/**
+ * POST /wp-json/oemm-xxvi/v1/foto/delete
+ * Body: { foto_id: 42 }
+ * Loescht Foto + DB-Eintraege. User darf nur eigene Fotos loeschen; Admins alle.
+ */
+function oemm_xxvi_rest_foto_delete( WP_REST_Request $req ): WP_REST_Response|WP_Error {
+    global $wpdb;
+    $user    = wp_get_current_user();
+    $foto_id = (int) ( $req->get_param( 'foto_id' ) ?? 0 );
+
+    if ( $foto_id <= 0 ) {
+        return new WP_Error( 'invalid_id', 'Ungueltige Foto-ID.', [ 'status' => 400 ] );
+    }
+
+    $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
+    $likes_table = $wpdb->prefix . OEMM_XXVI_LIKES_TABLE;
+    $is_admin    = current_user_can( 'manage_options' );
+
+    // Foto laden — Admin sieht alle, User nur eigene
+    if ( $is_admin ) {
+        $foto = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, user_id, filepath FROM {$fotos_table} WHERE id = %d LIMIT 1",
+            $foto_id
+        ) );
+    } else {
+        $foto = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, user_id, filepath FROM {$fotos_table} WHERE id = %d AND user_id = %d LIMIT 1",
+            $foto_id, $user->ID
+        ) );
+    }
+
+    if ( ! $foto ) {
+        return new WP_Error( 'not_found', 'Foto nicht gefunden oder kein Zugriff.', [ 'status' => 404 ] );
+    }
+
+    // Datei vom Server loeschen
+    $upload    = wp_upload_dir();
+    $full_path = trailingslashit( $upload['basedir'] ) . ltrim( $foto->filepath, '/' );
+    if ( file_exists( $full_path ) ) {
+        @unlink( $full_path );
+    }
+
+    // Likes loeschen
+    $wpdb->delete( $likes_table, [ 'foto_id' => $foto_id ], [ '%d' ] );
+
+    // DB-Eintrag loeschen
+    $wpdb->delete( $fotos_table, [ 'id' => $foto_id ], [ '%d' ] );
+
+    return new WP_REST_Response( [ 'success' => true, 'foto_id' => $foto_id ], 200 );
 }
 
 function oemm_xxvi_rest_sign( WP_REST_Request $req ) {

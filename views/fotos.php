@@ -54,6 +54,18 @@ $fotos_json = array_map( function( $f ) {
 .omm-btn-private:hover{background:rgba(255,255,255,.2)}
 .omm-btn-like{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.25);margin-left:auto}
 .omm-btn-like:hover,.omm-btn-like.liked{background:rgba(239,68,68,.35);color:#ff6b6b}
+.omm-btn-delete{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.25)}
+.omm-btn-delete:hover{background:rgba(239,68,68,.5);color:#fff}
+/* Delete Confirm Overlay */
+#ommDeleteModal{display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.8);align-items:center;justify-content:center}
+#ommDeleteModal.open{display:flex}
+#ommDeleteBox{background:#1a1a2e;border:1px solid rgba(239,68,68,.4);border-radius:16px;padding:28px 32px;text-align:center;max-width:320px;width:90%}
+#ommDeleteBox p{color:rgba(255,255,255,.75);font-size:14px;margin:10px 0 22px}
+.omm-del-btns{display:flex;gap:10px;justify-content:center}
+.omm-del-btn-cancel{background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.15);font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;padding:10px 22px;border-radius:8px;cursor:pointer;text-transform:uppercase;letter-spacing:.3px}
+.omm-del-btn-cancel:hover{background:rgba(255,255,255,.2)}
+.omm-del-btn-confirm{background:rgba(239,68,68,.8);color:#fff;border:1px solid rgba(239,68,68,.9);font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;padding:10px 22px;border-radius:8px;cursor:pointer;text-transform:uppercase;letter-spacing:.3px}
+.omm-del-btn-confirm:hover{background:rgb(239,68,68)}
 .omm-foto-badge-pub{position:absolute;top:6px;right:6px;background:rgba(34,197,94,.85);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;font-family:'Oswald',sans-serif;letter-spacing:.5px}
 .omm-zip-hint{background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.2);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:12px;color:rgba(240,192,64,.9);font-size:13px}
 .omm-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,.3)}
@@ -135,6 +147,11 @@ $fotos_json = array_map( function( $f ) {
                 data-foto-id="<?php echo (int)$foto->id; ?>">
             ❤️ <span class="like-count"><?php echo $like_count; ?></span>
         </button>
+        <button class="omm-foto-btn omm-btn-delete omm-delete-foto"
+                data-foto-id="<?php echo (int)$foto->id; ?>"
+                title="Foto löschen">
+            🗑️
+        </button>
     </div>
 </div>
 <?php endforeach; ?>
@@ -153,6 +170,18 @@ $fotos_json = array_map( function( $f ) {
        style="background:rgba(240,192,64,.15);color:#f0c040;border:1px solid rgba(240,192,64,.25);font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;padding:8px 16px;border-radius:8px;text-decoration:none;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap">
         → Zum Album
     </a>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div id="ommDeleteModal" role="dialog" aria-modal="true">
+    <div id="ommDeleteBox">
+        <div style="font-size:32px">🗑️</div>
+        <p>Dieses Foto wirklich löschen?<br><span style="font-size:12px;color:rgba(255,255,255,.4)">Diese Aktion kann nicht rückgängig gemacht werden.</span></p>
+        <div class="omm-del-btns">
+            <button class="omm-del-btn-cancel" id="ommDelCancel">Abbrechen</button>
+            <button class="omm-del-btn-confirm" id="ommDelConfirm">Löschen</button>
+        </div>
+    </div>
 </div>
 
 <!-- SWIPE LIGHTBOX -->
@@ -258,6 +287,25 @@ $fotos_json = array_map( function( $f ) {
             });
         });
         lbAct.appendChild(likeBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.id = 'lbDelBtn';
+        delBtn.className = 'omm-foto-btn omm-btn-delete';
+        delBtn.title = 'Foto löschen';
+        delBtn.textContent = '🗑️';
+        delBtn.addEventListener('click', function(){
+            const f = FOTOS[lbIdx];
+            openDeleteModal(f.id, function(){
+                // Lightbox schliessen + Slide entfernen
+                lb.classList.remove('open');
+                document.body.style.overflow = '';
+                lbBuilt = false; // rebuild beim naechsten Oeffnen
+                lbTrack.innerHTML = '';
+                lbDots.innerHTML = '';
+                lbAct.innerHTML = '';
+            });
+        });
+        lbAct.appendChild(delBtn);
 
         if (FOTOS.length <= 40) {
             // Dots nicht bei sehr vielen Fotos
@@ -453,6 +501,100 @@ $fotos_json = array_map( function( $f ) {
             });
         });
     });
+
+    // ============================================================
+    // DELETE FOTO
+    // ============================================================
+    let _deleteTarget = null; // { fotoId, cb }
+
+    const delModal   = document.getElementById('ommDeleteModal');
+    const delCancel  = document.getElementById('ommDelCancel');
+    const delConfirm = document.getElementById('ommDelConfirm');
+
+    function openDeleteModal(fotoId, afterDeleteCb) {
+        _deleteTarget = { fotoId: fotoId, cb: afterDeleteCb || null };
+        delModal.classList.add('open');
+    }
+
+    function closeDeleteModal() {
+        delModal.classList.remove('open');
+        _deleteTarget = null;
+    }
+
+    delCancel.addEventListener('click', closeDeleteModal);
+    delModal.addEventListener('click', function(e){ if (e.target === delModal) closeDeleteModal(); });
+
+    delConfirm.addEventListener('click', function(){
+        if (!_deleteTarget) return;
+        const fotoId = _deleteTarget.fotoId;
+        const cb     = _deleteTarget.cb;
+        closeDeleteModal();
+
+        delConfirm.disabled = true;
+        delConfirm.textContent = '...';
+
+        fetch(REST + '/foto/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': NONCE },
+            body: JSON.stringify({ foto_id: fotoId })
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            delConfirm.disabled = false;
+            delConfirm.textContent = 'L\u00f6schen';
+            if (d.success) {
+                // Aus FOTOS-Array entfernen
+                const fidx = FOTOS.findIndex(function(f){ return f.id === fotoId; });
+                if (fidx !== -1) FOTOS.splice(fidx, 1);
+
+                // Grid-Karte entfernen
+                const card = document.querySelector('.omm-foto-card[data-foto-id="'+fotoId+'"]');
+                if (card) {
+                    card.style.transition = 'opacity .25s,transform .25s';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(.9)';
+                    setTimeout(function(){ card.remove(); updateFotoCount(); }, 260);
+                }
+
+                // Callback (z.B. Lightbox schliessen)
+                if (cb) cb();
+            } else {
+                alert('L\u00f6schen fehlgeschlagen: ' + (d.message || 'Unbekannter Fehler'));
+            }
+        })
+        .catch(function(e){
+            delConfirm.disabled = false;
+            delConfirm.textContent = 'L\u00f6schen';
+            console.error('delete failed', e);
+            alert('Netzwerkfehler beim L\u00f6schen.');
+        });
+    });
+
+    // Grid Delete-Buttons
+    document.querySelectorAll('.omm-delete-foto').forEach(function(btn){
+        btn.addEventListener('click', function(e){
+            e.stopPropagation();
+            const fotoId = parseInt(this.dataset.fotoId);
+            openDeleteModal(fotoId, null);
+        });
+    });
+
+    function updateFotoCount() {
+        const countEl = document.querySelector('#omm-fotos-grid');
+        if (!countEl) return;
+        const remaining = document.querySelectorAll('.omm-foto-card').length;
+        const pubCount  = FOTOS.filter(function(f){ return f.is_public; }).length;
+        const info = countEl.previousElementSibling;
+        if (info && info.tagName === 'DIV') {
+            info.innerHTML = remaining + ' Foto' + (remaining !== 1 ? 's' : '') +
+                ' &nbsp;&middot;&nbsp; ' + pubCount + ' \u00f6ffentlich' +
+                '<span style="color:rgba(255,255,255,.2);margin-left:6px">\u00b7 Antippen zum Swipen</span>';
+        }
+        if (remaining === 0) {
+            const grid = document.getElementById('omm-fotos-grid');
+            if (grid) grid.innerHTML = '<div class="omm-empty" style="grid-column:1/-1"><div class="omm-empty-icon">📷</div><div style="font-family:\u2019Oswald\u2019,sans-serif;font-size:18px;font-weight:600;color:rgba(255,255,255,.5);margin-bottom:8px">Keine Fotos mehr</div></div>';
+        }
+    }
 
 })();
 </script>
