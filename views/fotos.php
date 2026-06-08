@@ -45,17 +45,17 @@ $fotos_json = array_map( function( $f ) {
 .omm-foto-card{position:relative;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);aspect-ratio:4/3;cursor:pointer;transition:transform .15s,border-color .15s}
 .omm-foto-card:hover{transform:translateY(-2px);border-color:rgba(240,192,64,.4)}
 .omm-foto-card img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-.omm-foto-overlay{position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,.75));display:flex;align-items:center;gap:5px;opacity:0;transition:opacity .15s}
+.omm-foto-overlay{position:absolute;bottom:0;left:0;right:0;padding:10px 10px;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .15s}
 .omm-foto-card:hover .omm-foto-overlay,.omm-foto-card.touch-show .omm-foto-overlay{opacity:1}
-.omm-foto-btn{border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;font-family:'Oswald',sans-serif;letter-spacing:.3px;transition:background .12s}
-.omm-btn-public{background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.3)}
-.omm-btn-public:hover{background:rgba(34,197,94,.35)}
-.omm-btn-private{background:rgba(255,255,255,.12);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.15)}
-.omm-btn-private:hover{background:rgba(255,255,255,.2)}
-.omm-btn-like{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.25);margin-left:auto}
-.omm-btn-like:hover,.omm-btn-like.liked{background:rgba(239,68,68,.35);color:#ff6b6b}
-.omm-btn-delete{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.25)}
-.omm-btn-delete:hover{background:rgba(239,68,68,.5);color:#fff}
+.omm-foto-btn{border:none;border-radius:8px;padding:8px 13px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Oswald',sans-serif;letter-spacing:.3px;transition:background .12s;line-height:1;min-width:38px;text-align:center}
+.omm-btn-public{background:rgba(34,197,94,.25);color:#4ade80;border:1px solid rgba(34,197,94,.4)}
+.omm-btn-public:hover{background:rgba(34,197,94,.45)}
+.omm-btn-private{background:rgba(255,255,255,.15);color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.2)}
+.omm-btn-private:hover{background:rgba(255,255,255,.28)}
+.omm-btn-like{background:rgba(239,68,68,.18);color:#f87171;border:1px solid rgba(239,68,68,.3);margin-left:auto}
+.omm-btn-like:hover,.omm-btn-like.liked{background:rgba(239,68,68,.45);color:#ff6b6b}
+.omm-btn-delete{background:rgba(239,68,68,.18);color:#f87171;border:1px solid rgba(239,68,68,.3)}
+.omm-btn-delete:hover{background:rgba(239,68,68,.55);color:#fff}
 /* Delete Confirm Overlay */
 #ommDeleteModal{display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.8);align-items:center;justify-content:center}
 #ommDeleteModal.open{display:flex}
@@ -89,7 +89,8 @@ $fotos_json = array_map( function( $f ) {
 #ommLbCounter{font-family:'Oswald',sans-serif;font-size:13px;color:rgba(255,255,255,.5);letter-spacing:.05em;margin-right:auto}
 #ommLbCaption{font-size:11px;color:rgba(255,255,255,.35)}
 /* Action Buttons in Lightbox */
-#ommLbActions{display:flex;gap:8px;align-items:center;padding:12px 16px;flex-shrink:0}
+#ommLbActions{display:flex;gap:10px;align-items:center;justify-content:center;padding:14px 16px;flex-shrink:0}
+#ommLbActions .omm-foto-btn{padding:11px 20px;font-size:16px;border-radius:10px;min-width:52px}
 /* Dots */
 #ommLbDots{display:flex;gap:5px;justify-content:center;padding-bottom:12px;flex-shrink:0;flex-wrap:wrap;max-height:28px;overflow:hidden}
 .omm-lb-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer;transition:background .2s,transform .2s;-webkit-tap-highlight-color:transparent}
