@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.7
+ * Version:     2.3.8
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.7' );
+define( 'OEMM_XXVI_VERSION', '2.3.8' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -1121,40 +1121,30 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     // AGB Text
     $pdf->SetTextColor(40, 40, 40);
 
-    // Vollstaendiger HA-Text (ISO-8859-1 kompatibel - keine Umlaute im Quellcode)
-    $fn = iconv('UTF-8','ISO-8859-1//TRANSLIT', $fullname);
+    // HA-Text: exakt gleicher Wortlaut wie HTML-View (Herzversion)
+    // Umlaute per iconv am Ende konvertiert - Quellcode bleibt UTF-8 lesbar
+    $fn = $fullname;
     $sections = [
-        'ALLGEMEINE GESCHAFTSBEDINGUNGEN' => [
-            $fn . ' erklaert seinen Beitritt zum Oetztaler Moped Verein (OeMV) als ordentliches Mitglied ohne Stimmrecht fuer die Dauer bis Ende September 2026.',
-            'Mit der Bezahlung des Mitgliedsbeitrags ist dem Mitglied die Teilnahme an Veranstaltungen des OeMV moeglich, allen voran der Oetztaler Mopedmarathon (OeMM). Diese Ausflugsfahrt erfolgt nicht gewerblich und ist kein Rennen.',
-            'Der OeMV kann Vorschriften fuer das Verhalten auf der Veranstaltung erlassen und diese nach eigenem Ermessen anpassen.',
-            'Zahlungen werden ausschliesslich per Online-Zahlung abgewickelt. Der Mitgliedsbeitrag beinhaltet die Startgebuer fuer den OeMM sowie die Aufnahmegebuer.',
+        'ALLGEMEINE GESCHAEFTSBEDINGUNGEN DES OeMV' => [
+            $fn . ' erklaert seinen Beitritt zum Oetztaler Moped Verein, spaeter "OeMV" genannt, mit Kauf der Mitgliedschaft, als ordentliches Mitglied ohne Stimmrecht fuer die Dauer bis Ende September des jeweiligen Jahres.',
+            'Mit der Bezahlung des Mitgliedsbeitrags ist die Teilnahme an Veranstaltungen die durch den OeMV organisiert werden, allen voran der OeMM, moeglich. Diese Ausflugsfahrt erfolgt nicht gewerblich, ist kein Rennen und dient der Mitgliederwerbung und Popularisierung der Mopedliebhaberei.',
+            'Dieser Mitgliedsbeitrag wird fuer die reibungslose Durchfuehrung des OeMM verwendet, fliesst ungekoerzt und unmittelbar dem OeMV zu. Weitere Veranstaltungen des OeMV werden nicht auf Kosten des Vereins organisiert. Lediglich die offizielle Vereinsausfahrt unter dem Namen OeMM ist durch den Mitgliedsbeitrag gedeckt.',
+            'Alle Vereinsmitglieder, welche sich an der Organisation des OeMM beteiligen, handeln als Vertreter des OeMV und damit nicht in eigenem Namen.',
         ],
         'TEILNAHMEBEDINGUNGEN & HAFTUNGSAUSSCHLUSS' => [
-            'Die Teilnahme am OeMM ist nur bei Volljaehrigkeit des Teilnehmers gestattet.',
-            'Mir, dem Teilnehmer, ist bewusst, dass eine derartige Ausflugsfahrt mit gewissen Risiken behaftet ist. Ich bestatige ausdruecklich, dass fuer Verletzungen und Schaeden jeglicher Art (an Personen, Fahrzeugen oder sonstigen Gegenstanden) dem OeMV und seinen Funktionaeren keinerlei Schuld zuweisbar ist, und ich den OeMV und seine Funktionaere schad- und klaglos halte. Ich bin im Besitz einer gueltigen Haftpflicht- und Unfallversicherung.',
-            'Weiters verpflichte ich mich, mich an alle Rundfahrt- und Sicherheitsvorschriften des OeMV zu halten und die Weisungen der Streckenposten und Funktionaere zu befolgen.',
-            '!! ACHTUNG: Ich bestatige hiermit ausdruecklich, dass ich bei der verbindlichen Fahrerbesprechung des OeMV persoenlich anwesend sein werde. Bei Nichterscheinen erlischt mein Startrecht ohne Anspruch auf Rueckerstattung.',
-            'Ich bestatige, dass mein Fahrzeug und meine Ausruestung keine Maengel aufweisen und dem Stand der Technik entsprechen. Bei augenscheinlichen Maengeln kann ich jederzeit ohne Rueckerstattung von der Teilnahme ausgeschlossen werden.',
-            'Die Teilnahme unter Alkohol- oder Drogeneinfluss ist streng untersagt. Bei begruendetem Verdacht ist der OeMV berechtigt, den Teilnehmer sofort und ohne Rueckerstattung auszuschliessen.',
+            'Die Teilnahme ist nur bei Volljaehrigkeit gestattet. Bei Fahrern unter 18 Jahren muss vor dem Start die schriftliche Einwilligung der Eltern an den OeMV uebergeben werden.',
+            'Mir, dem Teilnehmer, ist bewusst, dass eine derartige Ausflugsfahrt mit gewissen Risiken behaftet ist. Ich bestatige ausdruecklich, dass fuer Verletzungen und Schaeden jeglicher Art dem OeMV keinerlei Schuld zuweisbar ist und ich den OeMV schad- und klaglos halte. Ich bin im Besitz einer gueltigen Haftpflichtversicherung und persoenlichen Unfallversicherung.',
+            'Weiters verpflichte ich mich, mich an die Rundfahrt- und Sicherheitsvorschriften des OeMV zu halten.',
+            'ACHTUNG: Ich bestatige hiermit ausdruecklich, dass ich bei der verbindlichen Fahrerbesprechung des OeMV persoenlich anwesend sein werde.',
+            'Ich bestatige, dass meine Ausruestung keine Maengel aufweist. Bei augenscheinlichen Maengeln kann ich jederzeit von der Teilnahme ausgeschlossen werden.',
+            'Es werden auf der Strecke Geschwindigkeits- und Alkoholkontrollen erhoben. Der Teilnehmer erklaert ausdruecklich, weder unter Alkohol- noch Drogeneinfluss zu stehen.',
         ],
         'BILD- & TONRECHTE' => [
-            'Der OeMV ist berechtigt, Fotos, Videos, Tonaufnahmen und sonstige Medieninhalte des OeMM und seiner Teilnehmer fuer alle Zwecke (Werbung, Presse, Social Media, Dokumentation) in allen Medien weltweit unentgeltlich zu verwenden und zu veroeffentlichen.',
-            'Der OeMV ist berechtigt, diese Rechte an Dritte (z.B. Medienpartner, Sponsoren) zu uebertragen. Eine gesonderte Verguetung oder Zustimmung des Teilnehmers ist nicht erforderlich.',
+            'Der OeMV oder von ihm autorisierte Dritte sind berechtigt, Audio- und Videoaufzeichnungen sowie Fotos des OeMM fuer jegliche Zwecke in allen Medien weltweit zu verwenden. Der OeMV ist berechtigt, diese Rechte an Dritte zu uebertragen.',
         ],
-        'DATENSCHUTZ' => [
-            'Die erhobenen Mitgliedsdaten werden ausschliesslich fuer die Verwaltung der Veranstaltung und die Mitgliedschaft im OeMV verwendet. Eine Weitergabe an Dritte erfolgt nicht, soweit dies nicht zur Durchfuehrung des Events erforderlich ist.',
-            'Informationen gemaess DSGVO: Der Teilnehmer hat das Recht auf Auskunft, Berichtigung und Loeschung seiner Daten. Kontakt: info@mopedmarathon.at',
-        ],
-        'RUECKTRITT & STORNIERUNG' => [
-            'Bei Ruecktritt bis 4 Wochen vor Veranstaltungsbeginn: Rueckerstattung des Mitgliedsbeitrags abzueglich einer Bearbeitungsgebuer von EUR 25,--.',
-            'Bei Ruecktritt weniger als 4 Wochen vor Veranstaltungsbeginn: kein Anspruch auf Rueckerstattung. Eine Uebertragung des Startplatzes auf eine andere Person ist nach Absprache mit dem OeMV moeglich.',
-            'Rrueckgaberecht laut Fernabsatzgesetz: 14 Tage ohne Angabe von Gruenden ab Vertragsabschluss (gilt nicht, wenn der Service-Zeitraum bereits begonnen hat).',
-        ],
-        'SONSTIGES & GERICHTSSTAND' => [
-            'Diese Vereinbarung unterliegt oesterreichischem Recht. Gerichtsstand ist Innsbruck.',
-            'Gemaess Par. 19 Abs. 3 AStG: Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.',
-            'Sollten einzelne Bestimmungen dieser Vereinbarung unwirksam sein, bleibt die Wirksamkeit der uebrigen Bestimmungen davon unberuehrt.',
+        'RUECKGABERECHT & STREITBEILEGUNG' => [
+            'Rueckgaberecht laut Fernabsatzgesetz: 14 Tage ohne Angabe von Gruenden. Gerichtsstand: Innsbruck.',
+            'Information gem. Par. 19 Abs 3 AStG: Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.',
         ],
     ];
 
