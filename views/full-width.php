@@ -248,59 +248,320 @@ body.oemm-account-page { padding-top:0!important; }
   margin-bottom: 10px;
 }
 
-/* RESPONSIVE */
+/* ================================================================
+   MOBILE — Bottom Navigation (App-Style)
+   ================================================================ */
 @media (max-width: 820px) {
+
+  /* Layout: 1 Spalte, kein Padding oben (Header übernimmt das) */
   .oemm-layout {
     grid-template-columns: 1fr;
-    padding: 14px 12px 40px;
-    gap: 14px;
-  }
-  .oemm-sidebar { position: static !important; }
-  .oemm-logo-block img { width: 70px; height: 70px; }
-  .oemm-logo-text { font-size: 18px; }
-
-  /* Mobile Nav: 3-Spalten-Grid, kein Scrollen */
-  .oemm-nav-scroll {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    padding: 0;
     gap: 0;
   }
-  .oemm-nav-item {
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 11px 8px;
-    border-bottom: none !important;
-    border-left: none !important;
-    border-bottom: 3px solid transparent !important;
-    border-right: 1px solid rgba(255,255,255,.04) !important;
-  }
-  .oemm-nav-item.active {
-    background: rgba(240,192,64,.1);
-    border-bottom-color: #f0c040 !important;
-  }
-  .oemm-nav-icon { font-size: 18px; width: auto; }
-  .oemm-nav-label { font-size: 10px; white-space: nowrap; text-align: center; }
-  .oemm-nav-logout { display: none; }
 
-  /* Header Row auf Mobile: Countdown unter Titel, volle Breite */
-  .oemm-header-row { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .oemm-countdown-inline {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: nowrap;
-    overflow: hidden;
+  /* Sidebar komplett ausblenden */
+  .oemm-sidebar { display: none !important; }
+
+  /* Content bekommt vollen Screen */
+  #oemm-main-content {
+    padding: 0 14px 90px;
   }
-  .cd-val { font-size: 26px; }
-  .cd-sep { font-size: 20px; }
-  /* Rechts-Info im Countdown auf Mobile ausblenden */
-  .oemm-countdown-inline > div:last-child { display: none; }
+
+  /* Page-Title-Block auf Mobile ausblenden (Header-Strip macht das) */
+  .oemm-header-row { display: none; }
+
+  /* cd-val / cd-sep Größen für Mobile Bar */
+  .cd-val { font-size: 18px; }
+  .cd-sep { font-size: 14px; }
 }
 </style>
 </head>
 <body <?php body_class('oemm-account-page'); ?>>
 <?php wp_body_open(); ?>
+
+<!-- ================================================================
+     MOBILE ONLY: Header-Strip + Bottom-Nav + Mehr-Drawer
+     Nur sichtbar auf ≤ 820px
+     ================================================================ -->
+<style>
+/* ---- Mobile Header Strip ---- */
+.oemm-mobile-header {
+  display: none;
+}
+@media (max-width: 820px) {
+  .oemm-mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,.04);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .oemm-mh-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(240,192,64,.4);
+    flex-shrink: 0;
+  }
+  .oemm-mh-avatar-circle {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg,#2563eb,#1e40af);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+    border: 2px solid rgba(240,192,64,.4);
+  }
+  .oemm-mh-info { flex: 1; min-width: 0; }
+  .oemm-mh-name {
+    font-family: 'Oswald',sans-serif;
+    font-size: 15px; font-weight: 600; color: #fff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .oemm-mh-badge {
+    font-size: 10px; color: #f0c040;
+    opacity: .7; margin-top: 1px;
+  }
+  .oemm-mh-countdown {
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(240,192,64,.08);
+    border: 1px solid rgba(240,192,64,.2);
+    border-radius: 8px;
+    padding: 5px 10px;
+    flex-shrink: 0;
+  }
+  .oemm-mh-countdown .cd-val {
+    font-family: 'Oswald',sans-serif;
+    font-size: 15px; font-weight: 700; color: #f0c040;
+    display: inline;
+  }
+  .oemm-mh-countdown .cd-sep {
+    font-size: 12px; color: rgba(255,255,255,.3); margin-bottom: 0;
+    display: inline;
+  }
+
+  /* ---- Bottom Navigation ---- */
+  .oemm-bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 64px;
+    background: rgba(10,20,50,.97);
+    border-top: 1px solid rgba(255,255,255,.09);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    align-items: stretch;
+    z-index: 300;
+  }
+  .oemm-bn-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    text-decoration: none;
+    color: rgba(255,255,255,.45);
+    font-size: 10px;
+    font-family: 'Inter',sans-serif;
+    font-weight: 500;
+    transition: color .15s;
+    padding: 6px 2px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .oemm-bn-item.active {
+    color: #f0c040;
+  }
+  .oemm-bn-item .oemm-bn-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+  .oemm-bn-item .oemm-bn-label {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  /* ---- Mehr-Drawer ---- */
+  .oemm-mehr-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 400;
+    backdrop-filter: blur(4px);
+  }
+  .oemm-mehr-overlay.open { display: block; }
+  .oemm-mehr-drawer {
+    position: fixed;
+    bottom: 64px; left: 0; right: 0;
+    background: #0d1b3e;
+    border-top: 1px solid rgba(255,255,255,.1);
+    border-radius: 20px 20px 0 0;
+    padding: 16px 16px 8px;
+    z-index: 500;
+    transform: translateY(100%);
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+  }
+  .oemm-mehr-overlay.open .oemm-mehr-drawer {
+    transform: translateY(0);
+  }
+  .oemm-mehr-handle {
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,.2);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  .oemm-mehr-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .oemm-mehr-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    border-radius: 12px;
+    background: rgba(255,255,255,.05);
+    text-decoration: none;
+    color: rgba(255,255,255,.7);
+    font-size: 12px;
+    font-family: 'Inter',sans-serif;
+    font-weight: 500;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .oemm-mehr-item.active {
+    background: rgba(240,192,64,.12);
+    color: #f0c040;
+  }
+  .oemm-mehr-item .oemm-mehr-icon { font-size: 22px; }
+  .oemm-mehr-logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(255,80,80,.07);
+    border: 1px solid rgba(255,80,80,.15);
+    text-decoration: none;
+    color: rgba(255,80,80,.7);
+    font-size: 14px;
+    font-family: 'Inter',sans-serif;
+  }
+}
+</style>
+
+<?php
+// Nav-Items für Bottom-Nav aufteilen: 4 Haupt + Mehr
+$bottom_nav_main = [
+  'omm-dashboard'    => ['⊞',  'Dashboard'],
+  'omm-packliste'    => ['✅', 'Packliste'],
+  'omm-fotos'        => ['📷', 'Fotos'],
+  'omm-bestellungen' => ['📦', 'Bestell.'],
+];
+$bottom_nav_mehr = [
+  'omm-freundebuch'  => ['👥', 'Freundebuch'],
+  'omm-ergebnisse'   => ['🏁', 'Ergebnisse'],
+  'omm-album'        => ['🖼️', 'Öff. Album'],
+  'omm-downloads'    => ['⬇',  'Downloads'],
+  'omm-adresse'      => ['📍', 'Adresse'],
+  'omm-kontodetails' => ['⚙',  'Konto'],
+];
+$mehr_active = false;
+foreach ( $bottom_nav_mehr as $ep => $_ ) {
+  if ( strpos($uri, $ep) !== false ) { $mehr_active = true; break; }
+}
+?>
+
+<!-- Mobile Header Strip -->
+<div class="oemm-mobile-header">
+  <?php if ( $avatar_url ) : ?>
+    <img src="<?php echo esc_url($avatar_url); ?>" class="oemm-mh-avatar" alt="">
+  <?php else : ?>
+    <div class="oemm-mh-avatar-circle"><?php echo esc_html($initials); ?></div>
+  <?php endif; ?>
+  <div class="oemm-mh-info">
+    <div class="oemm-mh-name"><?php echo esc_html($fullname); ?></div>
+    <div class="oemm-mh-badge">Teilnehmer 2026</div>
+  </div>
+  <div class="oemm-mh-countdown">
+    <span class="cd-val" id="cd-mh-days">--</span><span class="cd-sep">T</span>
+    <span class="cd-val" id="cd-mh-hours" style="color:rgba(255,255,255,.6)">--</span><span class="cd-sep">H</span>
+  </div>
+</div>
+
+<!-- Bottom Navigation -->
+<nav class="oemm-bottom-nav">
+  <?php foreach ( $bottom_nav_main as $ep => [$icon, $label] ) :
+    $active = strpos($uri, $ep) !== false;
+  ?>
+  <a href="<?php echo esc_url(wc_get_account_endpoint_url($ep)); ?>"
+     class="oemm-bn-item<?php echo $active ? ' active' : ''; ?>">
+    <span class="oemm-bn-icon"><?php echo $icon; ?></span>
+    <span class="oemm-bn-label"><?php echo esc_html($label); ?></span>
+  </a>
+  <?php endforeach; ?>
+  <!-- Mehr Button -->
+  <button class="oemm-bn-item<?php echo $mehr_active ? ' active' : ''; ?>" onclick="ommOpenMehr()" type="button">
+    <span class="oemm-bn-icon">⋯</span>
+    <span class="oemm-bn-label">Mehr</span>
+  </button>
+</nav>
+
+<!-- Mehr-Drawer -->
+<div class="oemm-mehr-overlay" id="oemm-mehr-overlay" onclick="ommCloseMehr(event)">
+  <div class="oemm-mehr-drawer" id="oemm-mehr-drawer">
+    <div class="oemm-mehr-handle"></div>
+    <div class="oemm-mehr-grid">
+      <?php foreach ( $bottom_nav_mehr as $ep => [$icon, $label] ) :
+        $active = strpos($uri, $ep) !== false;
+      ?>
+      <a href="<?php echo esc_url(wc_get_account_endpoint_url($ep)); ?>"
+         class="oemm-mehr-item<?php echo $active ? ' active' : ''; ?>">
+        <span class="oemm-mehr-icon"><?php echo $icon; ?></span>
+        <?php echo esc_html($label); ?>
+      </a>
+      <?php endforeach; ?>
+    </div>
+    <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>" class="oemm-mehr-logout">
+      → Abmelden
+    </a>
+  </div>
+</div>
+
+<script>
+function ommOpenMehr() {
+  document.getElementById('oemm-mehr-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function ommCloseMehr(e) {
+  if (e.target === document.getElementById('oemm-mehr-overlay')) {
+    document.getElementById('oemm-mehr-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+}
+// Swipe-down zum Schließen
+(function(){
+  var drawer = document.getElementById('oemm-mehr-drawer');
+  var startY = 0;
+  drawer.addEventListener('touchstart', function(e){ startY = e.touches[0].clientY; }, {passive:true});
+  drawer.addEventListener('touchend', function(e){
+    if (e.changedTouches[0].clientY - startY > 60) ommCloseMehr({target: document.getElementById('oemm-mehr-overlay')});
+  }, {passive:true});
+})();
+</script>
 
 <div class="oemm-fw-page">
   <div class="oemm-layout">
@@ -356,13 +617,7 @@ body.oemm-account-page { padding-top:0!important; }
 
       </div><!-- /sidebar-card -->
 
-      <!-- Mobile Logout (sichtbar unter Nav auf Mobile) -->
-      <div style="display:none" class="oemm-mobile-logout">
-        <a href="<?php echo esc_url(wp_logout_url(home_url())); ?>"
-           style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:11px;background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.15);border-radius:12px;text-decoration:none;">
-          <span style="color:rgba(255,80,80,.7);font-size:14px">→ Abmelden</span>
-        </a>
-      </div>
+
 
     </div><!-- /sidebar -->
 
@@ -442,10 +697,18 @@ body.oemm-account-page { padding-top:0!important; }
 (function(){
   function update() {
     var diff = new Date('2026-06-26T08:00:00') - new Date();
-    if (diff <= 0) { ['cd-days2','cd-hours2','cd-mins2'].forEach(function(id){document.getElementById(id).textContent='0';}); return; }
-    document.getElementById('cd-days2').textContent  = Math.floor(diff/86400000);
-    document.getElementById('cd-hours2').textContent = String(Math.floor((diff%86400000)/3600000)).padStart(2,'0');
-    document.getElementById('cd-mins2').textContent  = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    var ids = ['cd-days2','cd-hours2','cd-mins2'];
+    if (diff <= 0) { ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent='0'; }); return; }
+    var d = Math.floor(diff/86400000);
+    var h = String(Math.floor((diff%86400000)/3600000)).padStart(2,'0');
+    var m = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    // Desktop
+    if(document.getElementById('cd-days2'))  document.getElementById('cd-days2').textContent  = d;
+    if(document.getElementById('cd-hours2')) document.getElementById('cd-hours2').textContent = h;
+    if(document.getElementById('cd-mins2'))  document.getElementById('cd-mins2').textContent  = m;
+    // Mobile Header
+    if(document.getElementById('cd-mh-days'))  document.getElementById('cd-mh-days').textContent  = d;
+    if(document.getElementById('cd-mh-hours')) document.getElementById('cd-mh-hours').textContent = h;
   }
   update(); setInterval(update, 30000);
 })();
@@ -462,13 +725,7 @@ function ommUploadAvatar(input) {
     .then(d => { if(d.success && d.data.url) location.reload(); });
 }
 
-// Mobile Logout anzeigen
-(function(){
-  if (window.innerWidth <= 820) {
-    var el = document.querySelector('.oemm-mobile-logout');
-    if (el) el.style.display = 'block';
-  }
-})();
+
 </script>
 
 <?php wp_footer(); ?>
