@@ -44,6 +44,78 @@ $app_url = oemm_xxvi_get_app_url( $user->ID );
 // HA-Status
 $ha_signed = get_user_meta( $user->ID, '_oemm_ha_signed_ts', true );
 
+// Checkin-Status (Startpaket abgeholt?)
+function oemm_xxvi_get_checkin( int $user_id ): ?object {
+    global $wpdb;
+    $ci = $wpdb->prefix . OEMM_XXVI_CHECKIN_TABLE;
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $ci ) ) !== $ci ) return null;
+    return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$ci} WHERE user_id=%d", $user_id ) ) ?: null;
+}
+$checkin = oemm_xxvi_get_checkin( $user->ID );
+$has_checkin = $checkin && !empty( $checkin->checked_in_at );
+
+// Pickup-Slot speichern
+if ( isset( $_POST['oemm_pickup_nonce'] ) && wp_verify_nonce( $_POST['oemm_pickup_nonce'], 'oemm_save_pickup_' . $user->ID ) ) {
+    global $wpdb;
+    $ci = $wpdb->prefix . OEMM_XXVI_CHECKIN_TABLE;
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $ci ) ) === $ci ) {
+        $slot = sanitize_text_field( $_POST['pickup_slot'] ?? '' );
+        $existing = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$ci} WHERE user_id=%d", $user->ID ) );
+        if ( $existing ) {
+            $wpdb->update( $ci, [ 'pickup_slot' => $slot ], [ 'user_id' => $user->ID ] );
+        } else {
+            $wpdb->insert( $ci, [ 'user_id' => $user->ID, 'pickup_slot' => $slot ] );
+        }
+        // Neu laden
+        $checkin = oemm_xxvi_get_checkin( $user->ID );
+    }
+}
+$saved_slot = $checkin->pickup_slot ?? '';
+
+// Gesamtzahl aktiver Teilnehmer 2026 als Schwellenwert
+function oemm_xxvi_get_participant_count(): int {
+    global $wpdb;
+    $n = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}oemm_participants WHERE event_year=2026" );
+    return $n > 0 ? $n : 1;
+}
+$total_participants = oemm_xxvi_get_participant_count();
+$slot_count_total = 8; // Anzahl Slots
+$slot_capacity = max( 1, (int) ceil( $total_participants / $slot_count_total ) );
+
+// Füllstand pro Slot (für Anzeige)
+function oemm_xxvi_get_slot_counts(): array {
+    global $wpdb;
+    $ci = $wpdb->prefix . OEMM_XXVI_CHECKIN_TABLE;
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $ci ) ) !== $ci ) return [];
+    $rows = $wpdb->get_results( "SELECT pickup_slot, COUNT(*) as cnt FROM {$ci} WHERE pickup_slot IS NOT NULL AND pickup_slot != '' GROUP BY pickup_slot" );
+    $result = [];
+    foreach ( $rows as $r ) $result[$r->pickup_slot] = (int)$r->cnt;
+    return $result;
+}
+$slot_counts = oemm_xxvi_get_slot_counts();
+$total_with_slot = array_sum($slot_counts);
+
+// Timetable laden
+function oemm_xxvi_get_timetable(): array {
+    global $wpdb;
+    $tt = $wpdb->prefix . OEMM_XXVI_TIMETABLE;
+    if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $tt ) ) !== $tt ) return [];
+    // Nur aktive Einträge + noch nicht abgelaufen (Endzeit oder Startzeit + 1h)
+    $now = current_time( 'Y-m-d H:i:s' );
+    return $wpdb->get_results( $wpdb->prepare(
+        "SELECT * FROM {$tt}
+         WHERE is_active = 1
+           AND ( end_time IS NOT NULL
+                 AND CONCAT(event_date,' ',end_time) >= %s
+                 OR end_time IS NULL
+                 AND CONCAT(event_date,' ',start_time) >= DATE_SUB(%s, INTERVAL 60 MINUTE) )
+         ORDER BY event_date, start_time, sort_order
+         LIMIT 20",
+        $now, $now
+    ) ) ?: [];
+}
+$timetable = oemm_xxvi_get_timetable();
+
 // Letzte Bestellungen (max 3)
 $orders = wc_get_orders( [
     'customer' => $user->ID,
@@ -239,82 +311,18 @@ function oemm_status_badge( $status ) {
   }
 </style>
 
-<!-- HA-Banner ggf. hier einfügen, Page-Header kommt aus full-width.php -->
-
-<!-- HA STATUS -->
-<?php if ( $ha_signed ) : ?>
-<div id="oemm-ha-banner" style="display:flex;align-items:center;gap:12px;padding:13px 18px;background:rgba(74,222,128,0.07);border:1px solid rgba(74,222,128,0.18);border-radius:12px;margin-bottom:18px;">
-  <span style="font-size:18px">✅</span>
-  <div style="flex:1;">
-    <div style="font-size:13px;color:#4ade80;font-weight:500;">Haftungsausschluss unterzeichnet</div>
-    <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">Unterzeichnet am <?php echo esc_html($ha_signed); ?></div>
-  </div>
-  <a href="<?php echo esc_url( wc_get_account_endpoint_url('haftungsausschluss') ); ?>"
-     onclick="ommDismissHA(event)"
-     style="font-size:12px;color:rgba(255,255,255,0.75);text-decoration:none;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:0.5px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);padding:5px 12px;border-radius:7px;transition:all .15s;">Ansehen →</a>
-</div>
-<div id="oemm-ha-dismissed" style="display:none;padding:10px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:18px;font-size:12px;color:rgba(255,255,255,0.3);text-align:center;">
-  ✅ Haftungsausschluss unterzeichnet — <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" style="color:rgba(255,255,255,0.45);text-decoration:none;">Im Downloadbereich verfügbar ↗</a>
-</div>
-<script>
-(function(){
-  var uid = '<?php echo esc_js((string)$user->ID); ?>';
-  var key = 'oemm_ha_dismissed_' + uid;
-  if (localStorage.getItem(key)) {
-    var b = document.getElementById('oemm-ha-banner');
-    var d = document.getElementById('oemm-ha-dismissed');
-    if(b) b.style.display = 'none';
-    if(d) d.style.display = 'block';
-  }
-})();
-function ommDismissHA(e) {
-  e.preventDefault();
-  var uid = '<?php echo esc_js((string)$user->ID); ?>';
-  var key = 'oemm_ha_dismissed_' + uid;
-  var target = '<?php echo esc_js( wc_get_account_endpoint_url('haftungsausschluss') ); ?>';
-  var banner = document.getElementById('oemm-ha-banner');
-  var dismissed = document.getElementById('oemm-ha-dismissed');
-  // Schritt 1: Banner weganimieren
-  banner.style.transition = 'all 0.5s cubic-bezier(.4,0,.2,1)';
-  banner.style.transform = 'translateX(80px)';
-  banner.style.opacity = '0';
-  banner.style.maxHeight = banner.offsetHeight + 'px';
-  setTimeout(function() {
-    banner.style.maxHeight = '0';
-    banner.style.marginBottom = '0';
-    banner.style.padding = '0';
-    banner.style.overflow = 'hidden';
-  }, 300);
-  // Schritt 2: Nach 600ms localStorage + dismissed einblenden + navigieren
-  setTimeout(function() {
-    localStorage.setItem(key, '1');
-    banner.style.display = 'none';
-    if(dismissed) {
-      dismissed.style.display = 'block';
-      dismissed.style.opacity = '0';
-      dismissed.style.transition = 'opacity 0.4s';
-      setTimeout(function(){ dismissed.style.opacity = '1'; }, 30);
-    }
-    setTimeout(function(){ window.location.href = target; }, 300);
-  }, 600);
-}
-</script>
-<?php endif; ?>
-
-<!-- TICKET CARD -->
+<!-- 1) TICKET CARD (Startnummer) -->
 <div style="background:linear-gradient(135deg,#0f3460 0%,#1a1a2e 40%,#0d1b3e 100%);border:1px solid rgba(240,192,64,.25);border-radius:20px;overflow:hidden;margin-bottom:18px;box-shadow:0 12px 40px rgba(0,0,0,.45);position:relative;">
   <div style="height:4px;background:repeating-linear-gradient(90deg,#f0c040 0,#f0c040 12px,transparent 12px,transparent 20px);"></div>
   <div class="oemm-ticket-inner" style="padding:24px 28px;display:flex;align-items:stretch;gap:0;">
-    <!-- Startnummer links -->
     <div class="oemm-ticket-left" style="flex-shrink:0;padding-right:24px;border-right:2px dashed rgba(255,255,255,.12);margin-right:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:110px;">
       <div style="font-family:'Oswald',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.35);margin-bottom:2px;">Startnummer</div>
-      <?php if ( $startnumber !== '—' ) : ?>
+      <?php if ( $startnumber !== '&#8212;' && $startnumber !== '&mdash;' && $startnumber !== '—' && $startnumber !== '' ) : ?>
       <div style="font-family:'Oswald',sans-serif;font-size:96px;font-weight:700;color:#f0c040;line-height:.85;text-shadow:0 4px 30px rgba(240,192,64,.5);letter-spacing:-4px;"><?php echo esc_html($startnumber); ?></div>
       <?php else : ?>
       <div style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:rgba(255,255,255,.2);">TBA</div>
       <?php endif; ?>
     </div>
-    <!-- Event-Info rechts -->
     <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:12px;">
       <div>
         <div style="font-family:'Oswald',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,.3);margin-bottom:5px;">Dein Start-Ticket</div>
@@ -334,6 +342,176 @@ function ommDismissHA(e) {
   </div>
   <div style="height:4px;background:repeating-linear-gradient(90deg,#f0c040 0,#f0c040 12px,transparent 12px,transparent 20px);"></div>
 </div>
+
+<!-- 2) STARTPAKET ABHOLEN (STATE 1: HA unterschrieben, Paket noch nicht abgeholt) -->
+<?php if ( $ha_signed && !$has_checkin ) : ?>
+<div style="background:linear-gradient(135deg,rgba(240,192,64,.08),rgba(240,192,64,.03));border:1px solid rgba(240,192,64,.25);border-radius:16px;padding:18px 20px;margin-bottom:18px;">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+    <span style="font-size:24px;">📦</span>
+    <div style="flex:1;">
+      <div style="font-size:15px;font-weight:700;color:#f0c040;font-family:'Oswald',sans-serif;">Startpaket abholen</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px;">Do 25. oder Fr 26. Juni - Eventgelände Sölden</div>
+    </div>
+  </div>
+  <div style="font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:14px;line-height:1.6;">
+    Dein Startpaket liegt bereit! Deinen QR-Code findest du in der <strong style="color:#fff;">ÖMM Besenwagen App</strong>.
+  </div>
+
+  <?php if ( $saved_slot ) : ?>
+  <!-- Slot gespeichert - kompakte Bestätigung + Ändern-Link -->
+  <?php
+    $all_slots = [
+      'do-nachmittag'=>'Do. 16:00 – 18:00 Uhr',
+      'do-spaetnachmittag'=>'Do. 18:00 – 20:00 Uhr','do-fruehrabend'=>'Do. 20:00 – 22:00 Uhr',
+      'fr-vormittag'=>'Fr. 10:00 – 13:00 Uhr','fr-mittag'=>'Fr. 13:00 – 16:00 Uhr',
+      'fr-nachmittag'=>'Fr. 16:00 – 19:00 Uhr','fr-fruehrabend'=>'Fr. 19:00 – 22:00 Uhr',
+    ];
+    $slot_label = $all_slots[$saved_slot] ?? $saved_slot;
+    $slot_cnt   = $slot_counts[$saved_slot] ?? 0;
+    // Füllgrad berechnen: Ampel basierend auf Anzahl Anmeldungen
+    $fill_pct = min(100, round($slot_cnt / $slot_capacity * 100));
+    $fill_color = $fill_pct < 40 ? '#4ade80' : ($fill_pct < 70 ? '#f0c040' : '#f87171');
+    $fill_label = $fill_pct < 40 ? 'Wenig los' : ($fill_pct < 70 ? 'Mäßig besucht' : 'Viel Andrang');
+  ?>
+  <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 16px;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-size:13px;color:#fff;font-weight:600;">✅ <?php echo esc_html($slot_label); ?></div>
+      <span style="font-size:11px;color:rgba(255,255,255,.4);">Deine Wahl</span>
+    </div>
+    <!-- Füllstandsbalken -->
+    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px;">Aktueller Andrang zu diesem Zeitfenster</div>
+    <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin-bottom:4px;">
+      <div style="width:<?php echo $fill_pct; ?>%;height:100%;background:<?php echo $fill_color; ?>;border-radius:6px;transition:width .4s;"></div>
+    </div>
+    <div style="font-size:11px;color:<?php echo $fill_color; ?>;">&#9679; <?php echo $fill_label; ?><?php if ( current_user_can('manage_options') ) echo ' &mdash; ' . $slot_cnt . ' Anmeldung' . ($slot_cnt !== 1 ? 'en' : ''); ?></div>
+  </div>
+  <button onclick="document.getElementById('oemm-pickup-form').style.display='block';this.style.display='none';" 
+    style="background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);font-size:12px;padding:7px 14px;border-radius:8px;cursor:pointer;width:100%;">Zeit ändern</button>
+  <div id="oemm-pickup-form" style="display:none;margin-top:12px;">
+  <?php else : ?>
+  <div id="oemm-pickup-form">
+  <?php endif; ?>
+
+  <!-- Formular -->
+  <form method="post" action="">
+    <?php wp_nonce_field( 'oemm_save_pickup_' . $user->ID, 'oemm_pickup_nonce' ); ?>
+    <!-- Füllstandsanzeige alle Slots -->
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;color:rgba(255,255,255,.35);font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Andrang pro Zeitfenster</div>
+      <?php
+      $slot_groups = [
+        'Donnerstag, 25. Juni (16:00 – 22:00 Uhr)' => [
+          'do-nachmittag'      => '16:00 – 18:00 Uhr',
+          'do-spaetnachmittag' => '18:00 – 20:00 Uhr',
+          'do-fruehrabend'     => '20:00 – 22:00 Uhr',
+        ],
+        'Freitag, 26. Juni (10:00 – 22:00 Uhr)' => [
+          'fr-vormittag'   => '10:00 – 13:00 Uhr',
+          'fr-mittag'      => '13:00 – 16:00 Uhr',
+          'fr-nachmittag'  => '16:00 – 19:00 Uhr',
+          'fr-fruehrabend' => '19:00 – 22:00 Uhr',
+        ],
+      ];
+      foreach ( $slot_groups as $group_label => $slots ) :
+      ?>
+      <div style="font-size:11px;color:rgba(255,255,255,.3);font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.8px;margin-top:10px;margin-bottom:4px;"><?php echo esc_html($group_label); ?></div>
+      <?php foreach ( $slots as $val => $label ) :
+        $sel = $saved_slot === $val;
+        $cnt = $slot_counts[$val] ?? 0;
+        $pct = min(100, round($cnt / $slot_capacity * 100));
+        $col = $pct < 40 ? '#4ade80' : ($pct < 70 ? '#f0c040' : '#f87171');
+      ?>
+      <label style="display:block;padding:10px 14px;background:<?php echo $sel ? 'rgba(240,192,64,.1)' : 'rgba(255,255,255,.02)'; ?>;border:1px solid <?php echo $sel ? 'rgba(240,192,64,.3)' : 'rgba(255,255,255,.07)'; ?>;border-radius:10px;cursor:pointer;margin-bottom:5px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+          <input type="radio" name="pickup_slot" value="<?php echo esc_attr($val); ?>" <?php echo $sel ? 'checked' : ''; ?> style="accent-color:#f0c040;width:16px;height:16px;flex-shrink:0;">
+          <span style="font-size:13px;color:<?php echo $sel ? '#f0c040' : 'rgba(255,255,255,.8)'; ?>;font-weight:<?php echo $sel ? '600' : '400'; ?>;"><?php echo esc_html($label); ?></span>
+          <?php if ( current_user_can('manage_options') ) : ?>
+          <span style="margin-left:auto;font-size:11px;color:<?php echo $col; ?>;"><?php echo $cnt; ?> Anm.</span>
+          <?php endif; ?>
+        </div>
+        <div style="background:rgba(255,255,255,.07);border-radius:4px;height:4px;overflow:hidden;">
+          <div style="width:<?php echo $pct; ?>%;height:100%;background:<?php echo $col; ?>;border-radius:4px;"></div>
+        </div>
+      </label>
+      <?php endforeach; endforeach; ?>
+    </div>
+    <button type="submit" style="background:#f0c040;color:#1a1a2e;font-family:'Oswald',sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.5px;padding:10px 20px;border:none;border-radius:10px;cursor:pointer;width:100%;">
+      Abholzeit speichern
+    </button>
+  </form>
+  </div><!-- /oemm-pickup-form -->
+</div>
+<?php endif; ?>
+
+<!-- (HA-Banner entfernt - Ticket steht oben, HA in Downloads) -->
+
+<!-- REDESIGN-HINWEIS: nur wenn _oemm_ha_redesign_notice gesetzt -->
+<?php
+$ha_redesign = get_user_meta( $user->ID, '_oemm_ha_redesign_notice', true );
+if ( $ha_redesign ) : ?>
+<div id="oemm-redesign-notice" style="display:flex;align-items:flex-start;gap:14px;padding:16px 20px;background:rgba(240,192,64,0.08);border:1px solid rgba(240,192,64,0.3);border-radius:14px;margin-bottom:18px;">
+  <span style="font-size:22px;flex-shrink:0;">✏️</span>
+  <div style="flex:1;">
+    <div style="font-size:13px;font-weight:600;color:#f0c040;margin-bottom:4px;">Kurze Info zu deinem Haftungsausschluss</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.6;">Wir haben den Haftungsausschluss optisch überarbeitet &mdash; der Inhalt ist unverändert geblieben. Bitte einmal kurz neu unterzeichnen, danke! 🙏</div>
+  </div>
+  <a href="<?php echo esc_url( wc_get_account_endpoint_url('haftungsausschluss') ); ?>"
+     style="flex-shrink:0;background:#f0c040;color:#1a1a2e;font-family:'Oswald',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding:8px 16px;border-radius:8px;text-decoration:none;white-space:nowrap;align-self:center;">Jetzt unterzeichnen →</a>
+</div>
+<?php endif; ?>
+
+<!-- TIMETABLE (vor Quick-Cards, gemäß Wunsch) -->
+<!-- TIMETABLE -->
+<?php if ( !empty($timetable) ) : ?>
+<div class="glass-card" style="margin-bottom:18px;">
+  <div class="glass-card-header">
+    <h3>📅 Programm &amp; Timetable</h3>
+    <?php if ($has_checkin) : ?>
+    <span style="font-size:12px;color:#4ade80;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);padding:3px 10px;border-radius:20px;">✅ Startpaket abgeholt</span>
+    <?php endif; ?>
+  </div>
+  <div style="padding:0 0 8px;">
+  <?php
+  $now_ts   = current_time( 'timestamp' );
+  $prev_day = '';
+  foreach ( $timetable as $item ) :
+    // Tagesheader
+    if ( $item->event_date !== $prev_day ) {
+      $day_names = ['Mon'=>'Mo','Tue'=>'Di','Wed'=>'Mi','Thu'=>'Do','Fri'=>'Fr','Sat'=>'Sa','Sun'=>'So'];
+      $day_label = date('D, d. M.', strtotime($item->event_date));
+      foreach ($day_names as $en=>$de) $day_label = str_replace($en,$de,$day_label);
+      $prev_day = $item->event_date;
+      echo '<div style="padding:8px 18px 4px;font-size:11px;font-family:Oswald,sans-serif;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.35);border-top:1px solid rgba(255,255,255,.06);margin-top:4px;">' . esc_html($day_label) . '</div>';
+    }
+    // Ist dieser Eintrag gerade aktiv?
+    $start_ts = strtotime($item->event_date . ' ' . $item->start_time);
+    $end_ts   = $item->end_time ? strtotime($item->event_date . ' ' . $item->end_time) : $start_ts + 3600;
+    $is_now   = $now_ts >= $start_ts && $now_ts <= $end_ts;
+    $is_next  = !$is_now && $start_ts > $now_ts && $start_ts <= $now_ts + 7200; // nächste 2h
+
+    $time_str = substr($item->start_time, 0, 5);
+    if ( $item->end_time ) $time_str .= ' – ' . substr($item->end_time, 0, 5);
+
+    $row_bg = $is_now ? 'rgba(240,192,64,.07)' : ($is_next ? 'rgba(255,255,255,.03)' : 'transparent');
+    $row_border = $is_now ? 'border-left:3px solid #f0c040;' : ($is_next ? 'border-left:3px solid rgba(255,255,255,.15);' : 'border-left:3px solid transparent;');
+  ?>
+  <div style="display:flex;align-items:center;gap:12px;padding:10px 18px;background:<?php echo $row_bg; ?>;<?php echo $row_border; ?>">
+    <span style="font-size:18px;flex-shrink:0;"><?php echo esc_html($item->icon); ?></span>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;color:<?php echo $is_now ? '#f0c040' : 'rgba(255,255,255,.85)'; ?>;font-weight:<?php echo $is_now ? '700' : '500'; ?>;">
+        <?php echo esc_html($item->title); ?>
+        <?php if ($is_now) echo '<span style="font-size:10px;background:#f0c040;color:#1a1a2e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:700;">JETZT</span>'; ?>
+        <?php if ($is_next && !$is_now) echo '<span style="font-size:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);padding:1px 6px;border-radius:4px;margin-left:6px;">als nächstes</span>'; ?>
+      </div>
+      <?php if ($item->subtitle) echo '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:1px;">'.esc_html($item->subtitle).'</div>'; ?>
+    </div>
+    <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:right;flex-shrink:0;font-family:Oswald,sans-serif;"><?php echo esc_html($time_str); ?></div>
+  </div>
+  <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
 
 <!-- QUICK CARDS -->
 <div class="cards-grid">

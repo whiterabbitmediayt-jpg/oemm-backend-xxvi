@@ -7,6 +7,7 @@
 * Author:  Olivier Plathey                                                     *
 *******************************************************************************/
 
+if (!class_exists('FPDF')) {
 class FPDF
 {
 const VERSION = '1.9';
@@ -1981,4 +1982,5 @@ protected function _enddoc()
 	$this->state = 3;
 }
 }
+} // end if !class_exists('FPDF')
 ?>

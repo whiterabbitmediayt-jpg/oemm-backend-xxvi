@@ -3,6 +3,14 @@ $user     = wp_get_current_user();
 $fullname = trim( $user->first_name . ' ' . $user->last_name ) ?: $user->display_name;
 $username = $user->user_login;
 $initials = strtoupper( substr( $fullname, 0, 1 ) );
+// Geburtsdatum
+$raw_dob     = get_user_meta( $user->ID, 'billing_geburtsdatum', true );
+$dob_display = '';
+if ( $raw_dob ) {
+    if ( preg_match('/^(\d{2})(\d{2})(\d{4})$/', $raw_dob, $m) )      $dob_display = $m[1].'.'.$m[2].'.'.$m[3];
+    elseif ( preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw_dob, $m) ) $dob_display = $m[3].'.'.$m[2].'.'.$m[1];
+    else $dob_display = $raw_dob;
+}
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -282,7 +290,7 @@ h1,h2,h3,h4,h5 { font-family: 'Oswald', sans-serif; font-weight: 600; }
       <h4>Allgemeine Geschäftsbedingungen des Ötztaler Moped Vereins</h4>
       <p style="color:rgba(255,255,255,0.3);font-size:11px;margin-bottom:14px;">Letztes Update: Juni 2026</p>
 
-      <p>Der Teilnehmer <strong style="color:rgba(255,255,255,0.85);"><?php echo esc_html($fullname); ?></strong> <span style="color:rgba(255,255,255,0.4);">(@<?php echo esc_html($username); ?>)</span> erklärt seinen Beitritt zum Ötztaler Moped Verein, später „ÖMV" genannt, mit Kauf der Mitgliedschaft, als ordentliches Mitglied ohne Stimmrecht für die Dauer bis Ende September des jeweiligen Jahres.</p>
+      <p>Der Teilnehmer <strong style="color:rgba(255,255,255,0.85);"><?php echo esc_html($fullname); ?></strong><?php if($dob_display): ?> <span style="color:rgba(255,255,255,0.5);font-size:12px;">(geb. <?php echo esc_html($dob_display); ?>)</span><?php endif; ?> <span style="color:rgba(255,255,255,0.4);">(@<?php echo esc_html($username); ?>)</span> erklärt seinen Beitritt zum Ötztaler Moped Verein, später „ÖMV" genannt, mit Kauf der Mitgliedschaft, als ordentliches Mitglied ohne Stimmrecht für die Dauer bis Ende September des jeweiligen Jahres.</p>
       <p>Mit der Bezahlung des Mitgliedsbeitrags ist die Teilnahme an Veranstaltungen die durch den Ötztaler Moped Verein organisiert werden, allen voran der Ötztaler Mopedmarathon, später angeführt als „ÖMM" bezeichnet, möglich. Diese Ausflugsfahrt erfolgt nicht gewerblich, ist kein Rennen und dient der Mitgliederwerbung bzw. zur Popularisierung der Mopedliebhaberei.</p>
       <p>Dieser Mitgliedsbeitrag wird für die reibungslose Durchführung des „ÖMM" verwendet, fließt ungekürzt und unmittelbar dem Ötztaler Moped Verein zu, der damit alleiniger Vertragspartner des „Teilnehmers" in den Allgemeinen Geschäftsbedingungen und Haftungsausschluss ist. Weitere Veranstaltungen des ÖMV werden nicht auf Kosten des Vereins organisiert und es werden hierfür gesonderte Beträge als Unkosten für Veranstaltungen an die Teilnehmer verrechnet. Lediglich die offizielle Vereinsausfahrt unter dem Namen ÖMM ist durch den Mitgliedsbeitrag gedeckt.</p>
       <p>Alle Vereinsmitglieder, welche sich an der Organisation des ÖMM beteiligen, handeln als Vertreter des ÖMV und damit nicht in eigenem Namen.</p>
@@ -407,7 +415,7 @@ h1,h2,h3,h4,h5 { font-family: 'Oswald', sans-serif; font-weight: 600; }
     fetch(restUrl,{
       method:'POST',
       headers:{'Content-Type':'application/json','X-WP-Nonce':nonce},
-      body:JSON.stringify({signature_png:sigPng,fullname:'<?php echo esc_js($fullname); ?>',username:'<?php echo esc_js($username); ?>',signed_ts:ts})
+      body:JSON.stringify({signature_png:sigPng,fullname:'<?php echo esc_js($fullname); ?>',username:'<?php echo esc_js($username); ?>',dob:'<?php echo esc_js($dob_display); ?>',signed_ts:ts})
     })
     .then(function(r){return r.json();})
     .then(function(d){

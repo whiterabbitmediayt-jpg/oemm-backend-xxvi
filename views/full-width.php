@@ -477,12 +477,12 @@ body.oemm-account-page { padding-top:0!important; }
 // Nav-Items für Bottom-Nav aufteilen: 4 Haupt + Mehr
 $bottom_nav_main = [
   'omm-dashboard'    => ['⊞',  'Dashboard'],
-  'omm-packliste'    => ['✅', 'Packliste'],
   'omm-fotos'        => ['📷', 'Fotos'],
-  'omm-bestellungen' => ['📦', 'Bestell.'],
+  'omm-packliste'    => ['✅', 'Packliste'],
+  'omm-freundebuch'  => ['👥', 'Freundebuch'],
 ];
 $bottom_nav_mehr = [
-  'omm-freundebuch'  => ['👥', 'Freundebuch'],
+  'omm-bestellungen' => ['📦', 'Bestellungen'],
   'omm-ergebnisse'   => ['🏁', 'Ergebnisse'],
   'omm-album'        => ['🖼️', 'Öff. Album'],
   'omm-downloads'    => ['⬇',  'Downloads'],

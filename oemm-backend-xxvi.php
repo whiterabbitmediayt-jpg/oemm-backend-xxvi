@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.13
+ * Version:     2.3.16
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.13' );
+define( 'OEMM_XXVI_VERSION', '2.3.16' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -71,6 +71,8 @@ define( 'OEMM_XXVI_URL',     plugin_dir_url( __FILE__ ) );
 define( 'OEMM_XXVI_TABLE',        'oemm_xxvi_agreements' );
 define( 'OEMM_XXVI_FOTOS_TABLE',  'oemm_xxvi_fotos' );
 define( 'OEMM_XXVI_LIKES_TABLE',  'oemm_xxvi_foto_likes' );
+define( 'OEMM_XXVI_TIMETABLE',     'oemm_xxvi_timetable' );
+define( 'OEMM_XXVI_CHECKIN_TABLE',  'oemm_xxvi_checkins' );
 
 /* ---------------------------------------------------------------
    ACTIVATION
@@ -132,6 +134,67 @@ function oemm_xxvi_activate() {
         KEY idx_liker (liker_user_id)
     ) {$charset};";
     dbDelta( $sql_likes );
+
+    // Timetable
+    $tt_table = $wpdb->prefix . OEMM_XXVI_TIMETABLE;
+    $sql_tt = "CREATE TABLE IF NOT EXISTS {$tt_table} (
+        id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        event_date  DATE NOT NULL,
+        start_time  TIME NOT NULL,
+        end_time    TIME DEFAULT NULL,
+        title       VARCHAR(255) NOT NULL,
+        subtitle    VARCHAR(255) DEFAULT NULL,
+        icon        VARCHAR(20) DEFAULT '📅',
+        category    VARCHAR(50) DEFAULT 'programm',
+        sort_order  INT UNSIGNED NOT NULL DEFAULT 0,
+        is_active   TINYINT(1) NOT NULL DEFAULT 1,
+        PRIMARY KEY (id),
+        KEY idx_date_time (event_date, start_time)
+    ) {$charset};";
+    dbDelta( $sql_tt );
+
+    // Timetable mit Initialdaten befüllen (nur wenn leer)
+    $count = $wpdb->get_var( "SELECT COUNT(*) FROM {$tt_table}" );
+    if ( (int)$count === 0 ) {
+        $entries = [
+            [ '2026-06-25', '16:00:00', '22:00:00', 'Ausgabe der Startpakete', 'Eventgelände Sölden', '📦', 'logistik', 10 ],
+            [ '2026-06-26', '10:00:00', '22:00:00', 'Ausgabe der Startpakete', 'Eventgelände Sölden', '📦', 'logistik', 20 ],
+            [ '2026-06-26', '12:30:00', null,        'Start Gletscherausfahrt', null, '🏍', 'rennen', 30 ],
+            [ '2026-06-26', '19:30:00', null,        'Verbindliche Fahrerbesprechung', null, '📋', 'programm', 40 ],
+            [ '2026-06-26', '23:59:00', null,        'Veranstaltungsende', null, '🎉', 'programm', 50 ],
+            [ '2026-06-27', '06:00:00', null,        'Start Ötztaler Mopedmarathon XXVI', null, '🏁', 'rennen', 60 ],
+            [ '2026-06-27', '14:00:00', null,        'Ankunft der ersten Rider im Ziel', 'ca. 14:00 Uhr', '🥇', 'rennen', 70 ],
+            [ '2026-06-27', '17:30:00', null,        'Ankunft der letzten Rider im Ziel', null, '🏍', 'rennen', 80 ],
+            [ '2026-06-27', '21:00:00', null,        'Siegerehrung', null, '🏆', 'programm', 90 ],
+            [ '2026-06-27', '23:59:00', null,        'Veranstaltungsende', null, '🎉', 'programm', 100 ],
+        ];
+        foreach ( $entries as $e ) {
+            $wpdb->insert( $tt_table, [
+                'event_date' => $e[0],
+                'start_time' => $e[1],
+                'end_time'   => $e[2],
+                'title'      => $e[3],
+                'subtitle'   => $e[4],
+                'icon'       => $e[5],
+                'category'   => $e[6],
+                'sort_order' => $e[7],
+                'is_active'  => 1,
+            ]);
+        }
+    }
+
+    // Checkins-Tabelle
+    $ci_table = $wpdb->prefix . OEMM_XXVI_CHECKIN_TABLE;
+    $sql_ci = "CREATE TABLE IF NOT EXISTS {$ci_table} (
+        id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id         BIGINT UNSIGNED NOT NULL,
+        pickup_slot     VARCHAR(100) DEFAULT NULL,
+        checked_in_at   DATETIME DEFAULT NULL,
+        checked_in_by   VARCHAR(100) DEFAULT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_user (user_id)
+    ) {$charset};";
+    dbDelta( $sql_ci );
 
     // Foto-Storage Verzeichnis anlegen + sichern
     oemm_xxvi_fotos_init_storage();
@@ -921,6 +984,18 @@ function oemm_xxvi_rest_sign( WP_REST_Request $req ) {
     $fullname  = sanitize_text_field( $req->get_param('fullname') )  ?: trim( $user->first_name . ' ' . $user->last_name ) ?: $user->display_name;
     $username  = sanitize_text_field( $req->get_param('username') )  ?: $user->user_login;
     $signed_ts = sanitize_text_field( $req->get_param('signed_ts') ) ?: current_time( 'd.m.Y — H:i:s \U\h\r' );
+    // Geburtsdatum aus Request oder User-Meta
+    $dob_param = sanitize_text_field( $req->get_param('dob') );
+    if ( ! $dob_param ) {
+        $raw_dob = get_user_meta( $user->ID, 'billing_geburtsdatum', true );
+        if ( $raw_dob && preg_match('/^(\d{2})(\d{2})(\d{4})$/', $raw_dob, $m) ) {
+            $dob_param = $m[1] . '.' . $m[2] . '.' . $m[3];
+        } elseif ( $raw_dob && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $raw_dob, $m) ) {
+            $dob_param = $m[3] . '.' . $m[2] . '.' . $m[1];
+        } else {
+            $dob_param = (string) $raw_dob;
+        }
+    }
 
     $inserted = $wpdb->insert( $table, [
         'user_id'       => $user->ID,
@@ -928,6 +1003,7 @@ function oemm_xxvi_rest_sign( WP_REST_Request $req ) {
         'username'      => $username,
         'signed_at'     => current_time( 'mysql' ),
         'signed_at_ts'  => $signed_ts,
+        'geburtsdatum'  => $dob_param,
         'signature_png' => $sig,
         'ip_address'    => sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' ),
     ] );
@@ -936,8 +1012,12 @@ function oemm_xxvi_rest_sign( WP_REST_Request $req ) {
         return new WP_Error( 'db_error', 'Fehler beim Speichern.', [ 'status' => 500 ] );
     }
 
+    update_user_meta( $user->ID, '_oemm_ha_dob', $dob_param );
+    // Redesign-Hinweis wegräumen sobald neu unterschrieben
+    delete_user_meta( $user->ID, '_oemm_ha_redesign_notice' );
+
     // HTML-Dokument als Download speichern
-    oemm_xxvi_save_agreement( $user->ID, $fullname, $username, $signed_ts, $sig );
+    oemm_xxvi_save_agreement( $user->ID, $fullname, $username, $signed_ts, $sig, $dob_param );
 
     return rest_ensure_response( [
         'success'  => true,
@@ -948,7 +1028,7 @@ function oemm_xxvi_rest_sign( WP_REST_Request $req ) {
 /* ---------------------------------------------------------------
    AGREEMENT DOKUMENT SPEICHERN + DOWNLOAD ANLEGEN
 --------------------------------------------------------------- */
-function oemm_xxvi_save_agreement( $user_id, $fullname, $username, $signed_ts, $sig_png ) {
+function oemm_xxvi_save_agreement( $user_id, $fullname, $username, $signed_ts, $sig_png, $dob = '' ) {
     $upload   = wp_upload_dir();
     $dir      = trailingslashit( $upload['basedir'] ) . 'oemm-agreements/';
     if ( ! file_exists( $dir ) ) {
@@ -958,7 +1038,7 @@ function oemm_xxvi_save_agreement( $user_id, $fullname, $username, $signed_ts, $
     }
     $filename = 'ha-' . $user_id . '.pdf';
     $filepath = $dir . $filename;
-    oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png );
+    oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png, $dob );
 
     // WC Download Permission anlegen
     $dl_key = 'oemm_ha_' . $user_id;
@@ -972,10 +1052,9 @@ function oemm_xxvi_save_agreement( $user_id, $fullname, $username, $signed_ts, $
     update_user_meta( $user_id, '_oemm_ha_dl_url',   $dl_url );
     update_user_meta( $user_id, '_oemm_ha_dl_file',  $filepath );
     update_user_meta( $user_id, '_oemm_ha_signed_ts', $signed_ts );
-    // Sig-PNG fuer spatere Regenerierung aufbewahren
-    if ( ! empty( $sig_png ) ) {
-        update_user_meta( $user_id, '_oemm_ha_sig_png', $sig_png );
-    }
+    // Sig-PNG + DOB fuer spatere Regenerierung aufbewahren
+    if ( ! empty( $sig_png ) ) update_user_meta( $user_id, '_oemm_ha_sig_png', $sig_png );
+    if ( ! empty( $dob ) )     update_user_meta( $user_id, '_oemm_ha_dob', $dob );
 }
 
 // Sicherer Download-Handler
@@ -986,26 +1065,30 @@ function oemm_xxvi_download_handler() {
 
     $user_id  = absint( $_GET['uid'] ?? 0 );
     $token    = sanitize_text_field( $_GET['token'] ?? '' );
+    $is_admin = current_user_can( 'manage_options' );
 
-    if ( get_current_user_id() !== $user_id ) wp_die( 'Kein Zugriff.' );
+    // Nur eigener User ODER Admin darf runterladen
+    if ( ! $is_admin && get_current_user_id() !== $user_id ) wp_die( 'Kein Zugriff.' );
 
     $filepath = get_user_meta( $user_id, '_oemm_ha_dl_file', true );
     $expected = hash( 'sha256', AUTH_KEY . $user_id . basename( $filepath ) );
 
-    if ( ! hash_equals( $expected, $token ) ) wp_die( 'Ungültiger Token.' );
+    // Token-Prüfung: Admin darf auch ohne Token (direkter Admin-Download)
+    if ( ! $is_admin && ! hash_equals( $expected, $token ) ) wp_die( 'Ungültiger Token.' );
 
     // Auto-Regenerierung: falls Datei fehlt ODER noch .html (alte Version)
     if ( ! file_exists( $filepath ) || substr( $filepath, -5 ) === '.html' || filesize( $filepath ) < 500 ) {
         $u         = get_user_by( 'id', $user_id );
         $fullname  = trim( $u->first_name . ' ' . $u->last_name ) ?: $u->display_name;
         $username  = $u->user_login;
-        $signed_ts = get_user_meta( $user_id, '_oemm_ha_signed_ts', true ) ?: date('d.m.Y H:i:s');
-        $sig_png   = get_user_meta( $user_id, '_oemm_ha_sig_png',  true ) ?: '';
+        $signed_ts  = get_user_meta( $user_id, '_oemm_ha_signed_ts', true ) ?: date('d.m.Y H:i:s');
+        $sig_png    = get_user_meta( $user_id, '_oemm_ha_sig_png',  true ) ?: '';
+        $dob_regen  = get_user_meta( $user_id, '_oemm_ha_dob', true ) ?: '';
         $upload    = wp_upload_dir();
         $dir       = trailingslashit( $upload['basedir'] ) . 'oemm-agreements/';
         wp_mkdir_p( $dir );
         $filepath  = $dir . 'ha-' . $user_id . '.pdf';
-        oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png );
+        oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png, $dob_regen );
         // Update DL-Link und File-Path
         $filename = basename( $filepath );
         $dl_url = add_query_arg( [
@@ -1031,8 +1114,165 @@ function oemm_xxvi_download_handler() {
     exit;
 }
 
-function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png ) {
-    // FPDF laden (stabile Version, Latin-1 = Umlaute korrekt via iconv)
+/* ---------------------------------------------------------------
+   PDF GENERIERUNG via wkhtmltopdf (HTML-basiert, volle UTF-8 + Emojis)
+--------------------------------------------------------------- */
+function oemm_xxvi_generate_pdf_html( $filepath, $fullname, $username, $signed_ts, $sig_png, $dob = '' ) {
+    $logo_path = OEMM_XXVI_PATH . 'assets/rocky-logo-pdf.png';
+    $logo_url  = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode( file_get_contents($logo_path) ) : '';
+    $dob_pdf   = $dob ? ' (geb. ' . htmlspecialchars($dob, ENT_QUOTES) . ')' : '';
+    $dob_line  = $dob ? ' <span style="color:rgba(255,255,255,0.5);font-size:12px;">(geb. ' . htmlspecialchars($dob, ENT_QUOTES) . ')</span>' : '';
+    $sig_html  = (!empty($sig_png) && strpos($sig_png,'data:image/png;base64,')===0)
+        ? '<img src="'.htmlspecialchars($sig_png, ENT_QUOTES).'" style="max-width:100%;max-height:120px;display:block;margin:0 auto;">'
+        : '<p style="color:#aaa;text-align:center;">Keine Unterschrift</p>';
+    $fn_esc  = htmlspecialchars($fullname,  ENT_QUOTES);
+    $un_esc  = htmlspecialchars($username,  ENT_QUOTES);
+    $ts_esc  = htmlspecialchars($signed_ts, ENT_QUOTES);
+
+    $logo_img = $logo_url ? '<img src="'.$logo_url.'" style="width:50px;height:50px;" alt="Logo">' : '';
+
+    $html = <<<HATML
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+body{font-family:Arial,Helvetica,sans-serif;background:#0d1b3e;color:#fff;margin:0;padding:20px;}
+.wrap{max-width:750px;margin:0 auto;}
+h4{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.7);margin:14px 0 6px;}
+.body-text{font-size:12px;color:rgba(255,255,255,0.6);line-height:1.7;margin-bottom:10px;}
+.warning{background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.3);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:12px;color:#f0c040;}
+.footer{background:#0f3460;border-radius:10px;padding:10px 18px;font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:20px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<table style="width:100%;border-collapse:collapse;background:#0f3460;border-radius:12px;margin-bottom:18px;" cellpadding="0" cellspacing="0">
+<tr>
+  <td style="width:60px;vertical-align:middle;padding:18px 0 18px 18px;">{$logo_img}</td>
+  <td style="vertical-align:middle;padding:18px;">
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.3);">&#214;tztaler Moped Verein</div>
+    <div style="font-size:22px;font-weight:bold;color:#fff;margin:2px 0;">Haftungsausschluss</div>
+    <div style="font-size:12px;color:#f0c040;">&#214;MM XXVI 2026 &mdash; mopedmarathon.at</div>
+  </td>
+</tr>
+</table>
+
+<table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;margin-bottom:16px;" cellpadding="0" cellspacing="0">
+<tr><td style="padding:12px 18px;">
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <tr>
+      <td style="color:rgba(255,255,255,0.4);font-size:11px;text-transform:uppercase;width:110px;padding:3px 0;">Teilnehmer</td>
+      <td style="color:rgba(255,255,255,0.7);padding:3px 0;"><strong style="color:#fff;">{$fn_esc}</strong>{$dob_pdf} &nbsp;<span style="color:rgba(255,255,255,0.3);font-size:11px;">@{$un_esc}</span></td>
+    </tr>
+    <tr>
+      <td style="color:rgba(255,255,255,0.4);font-size:11px;text-transform:uppercase;padding:3px 0;">Veranstalter</td>
+      <td style="color:rgba(255,255,255,0.7);padding:3px 0;"><strong style="color:#fff;">&#214;tztaler Moped Verein</strong>, S&ouml;lden, Tirol</td>
+    </tr>
+    <tr>
+      <td style="color:rgba(255,255,255,0.4);font-size:11px;text-transform:uppercase;padding:3px 0;">Unterzeichnet</td>
+      <td style="padding:3px 0;"><strong style="color:#4ade80;">{$ts_esc}</strong></td>
+    </tr>
+  </table>
+</td></tr>
+</table>
+
+<div style="text-align:center;font-size:48px;margin:10px 0;">&#10084;&#65039;</div>
+<div class="body-text" style="text-align:center;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.07);">
+  <strong style="color:rgba(255,255,255,0.85);font-size:13px;">Vielen Dank f&uuml;r dein Vertrauen und herzlich Willkommen im Verein!</strong><br><br>
+  Du kannst dir sicher sein, dass wir uns wieder die allergr&ouml;&szlig;te M&uuml;he geben werden, um f&uuml;r dich und die 50ccm Community ein gro&szlig;artiges Treffen auf die Beine zu stellen. Das ist und bleibt unser Qualit&auml;tsanspruch!<br><br>
+  Nochmals vielen Dank f&uuml;r dein Vertrauen und beste Gr&uuml;&szlig;e aus S&ouml;lden,
+  <strong style="color:rgba(255,255,255,0.7);">dein &Ouml;tztaler Moped Verein</strong>
+</div>
+
+<h4>Allgemeine Gesch&auml;ftsbedingungen des &Ouml;tztaler Moped Vereins</h4>
+<p style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:10px;">Letztes Update: Juni 2026</p>
+<div class="body-text">Der Teilnehmer <strong style="color:rgba(255,255,255,0.85);">{$fn_esc}</strong>{$dob_pdf} (@{$un_esc}) erkl&auml;rt seinen Beitritt zum &Ouml;tztaler Moped Verein, sp&auml;ter &bdquo;&Ouml;MV&ldquo; genannt, mit Kauf der Mitgliedschaft, als ordentliches Mitglied ohne Stimmrecht f&uuml;r die Dauer bis Ende September des jeweiligen Jahres.</div>
+<div class="body-text">Mit der Bezahlung des Mitgliedsbeitrags ist die Teilnahme an Veranstaltungen die durch den &Ouml;MV organisiert werden, allen voran der &Ouml;tztaler Mopedmarathon, m&ouml;glich. Diese Ausflugsfahrt erfolgt nicht gewerblich, ist kein Rennen und dient der Mitgliederwerbung bzw. zur Popularisierung der Mopedliebhaberei.</div>
+<div class="body-text">Dieser Mitgliedsbeitrag wird f&uuml;r die reibungslose Durchf&uuml;hrung des &bdquo;&Ouml;MM&ldquo; verwendet, flie&szlig;t ungek&uuml;rzt und unmittelbar dem &Ouml;tztaler Moped Verein zu, der damit alleiniger Vertragspartner des &bdquo;Teilnehmers&ldquo; in den Allgemeinen Gesch&auml;ftsbedingungen und Haftungsausschluss ist.</div>
+<div class="body-text">Alle Vereinsmitglieder, welche sich an der Organisation des &Ouml;MM beteiligen, handeln als Vertreter des &Ouml;MV und damit nicht in eigenem Namen.</div>
+
+<h4>Teilnahmebedingungen &amp; Haftungsausschluss</h4>
+<div class="body-text">Die Teilnahme ist nur bei Vollj&auml;hrigkeit gestattet. Bei Fahrern unter 18 Jahren muss vor dem Start die schriftliche Einwilligung der Eltern an den &Ouml;MV &uuml;bergeben werden.</div>
+<div class="body-text">Mir, dem &bdquo;Teilnehmer&ldquo;, ist bewusst, dass eine derartige Ausflugsfahrt mit gewissen Risiken behaftet ist. Ich best&auml;tige daher ausdr&uuml;cklich, dass f&uuml;r Verletzungen und Sch&auml;den jeglicher Art dem &Ouml;MV keinerlei Schuld zuweisbar ist und ich den &Ouml;MV schad- und klaglos halte. Ich bin im Besitz einer g&uuml;ltigen Haftpflichtversicherung und pers&ouml;nlichen Unfallversicherung.</div>
+<div class="body-text">Weiters verpflichte ich mich, mich an die Rundfahrt- und Sicherheitsvorschriften des &Ouml;MV zu halten.</div>
+<div class="warning">&#9888;&#65039; Ich best&auml;tige hiermit ausdr&uuml;cklich, dass ich bei der verbindlichen Fahrerbesprechung des &Ouml;MV pers&ouml;nlich anwesend sein werde.</div>
+<div class="body-text">Ich best&auml;tige, dass meine Ausr&uuml;stung keine M&auml;ngel aufweist. Bei augenscheinlichen M&auml;ngeln kann ich jederzeit von der Teilnahme ausgeschlossen werden.</div>
+<div class="body-text">Es werden auf der Strecke Geschwindigkeits- und Alkoholkontrollen erhoben. Der Teilnehmer erkl&auml;rt ausdr&uuml;cklich, weder unter Alkohol- noch Drogeneinfluss zu stehen.</div>
+
+<h4>Bild- &amp; Tonrechte</h4>
+<div class="body-text">Der &Ouml;MV oder von ihm autorisierte Dritte sind berechtigt, Audio- und Videoaufzeichnungen sowie Fotos des &Ouml;MM f&uuml;r jegliche Zwecke in allen Medien weltweit zu verwenden.</div>
+
+<h4>R&uuml;ckgaberecht &amp; Streitbeilegung</h4>
+<div class="body-text">R&uuml;ckgaberecht laut Fernabsatzgesetz: 14 Tage ohne Angabe von Gr&uuml;nden. Gerichtsstand: Innsbruck.<br>
+Information gem. &sect;19 Abs 3 AStG: Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</div>
+
+<table style="width:100%;border-collapse:collapse;border:1px solid rgba(255,255,255,0.1);border-radius:10px;overflow:hidden;margin-top:16px;" cellpadding="0" cellspacing="0">
+<tr><td style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">
+  <div style="font-size:13px;font-weight:bold;color:rgba(255,255,255,0.8);margin-bottom:2px;">&#9997;&#65039; Digitale Unterschrift</div>
+  <div style="font-size:11px;color:rgba(255,255,255,0.3);">Rechtsverbindlich gem&auml;&szlig; EU-Verordnung 910/2014 (eIDAS)</div>
+</td></tr>
+<tr><td style="background:#ffffff;padding:10px;text-align:center;">{$sig_html}</td></tr>
+<tr><td style="padding:10px 18px;border-top:1px solid rgba(255,255,255,0.08);">
+  <table style="width:100%;border-collapse:collapse;font-size:11px;color:rgba(255,255,255,0.4);">
+  <tr>
+    <td>&#128100; {$fn_esc}{$dob_pdf}</td>
+    <td style="text-align:center;">@{$un_esc}</td>
+    <td style="text-align:right;">&#128336; {$ts_esc}</td>
+  </tr>
+  </table>
+</td></tr>
+</table>
+
+<div class="footer">&Ouml;tztaler Moped Verein &mdash; &Ouml;MM XXVI 2026 &mdash; <span style="color:#f0c040;">mopedmarathon.at</span> &mdash; Unterzeichnet: {$ts_esc}</div>
+</div>
+</body>
+</html>
+HATML;
+
+    $tmp_html = tempnam( sys_get_temp_dir(), 'oemm_pdf_' ) . '.html';
+    file_put_contents( $tmp_html, $html );
+
+    $cmd = escapeshellcmd('/usr/bin/wkhtmltopdf')
+        . ' --page-size A4'
+        . ' --margin-top 8mm'
+        . ' --margin-bottom 8mm'
+        . ' --margin-left 10mm'
+        . ' --margin-right 10mm'
+        . ' --encoding UTF-8'
+        . ' --no-stop-slow-scripts'
+        . ' --enable-local-file-access'
+        . ' --background'
+        . ' --disable-smart-shrinking'
+        . ' ' . escapeshellarg($tmp_html)
+        . ' ' . escapeshellarg($filepath)
+        . ' 2>/dev/null';
+
+    exec($cmd, $out, $rc);
+    unlink($tmp_html);
+
+    if ( $rc !== 0 || ! file_exists($filepath) || filesize($filepath) < 500 ) {
+        if ( ! class_exists('FPDF') ) require_once OEMM_XXVI_PATH . 'lib/fpdf.php';
+        $pdf = new FPDF_OMM('P','mm','A4');
+        $pdf->AddPage();
+        $pdf->SetFont('Helvetica','B',14);
+        $pdf->Cell(0,10, iconv('UTF-8','ISO-8859-1//TRANSLIT','Haftungsausschluss OeMM 2026'),0,1,'C');
+        $pdf->SetFont('Helvetica','',10);
+        $pdf->Cell(0,8, iconv('UTF-8','ISO-8859-1//TRANSLIT',$fullname . ' (@' . $username . ')'),0,1);
+        $pdf->Cell(0,8, iconv('UTF-8','ISO-8859-1//TRANSLIT','Unterzeichnet: ' . $signed_ts),0,1);
+        $pdf->Output('F', $filepath);
+    }
+}
+
+function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png, $dob = '' ) {
+    // wkhtmltopdf: HTML -> PDF, volle UTF-8/Emoji-Unterstützung
+    $wk = '/usr/bin/wkhtmltopdf';
+    if ( file_exists($wk) ) {
+        oemm_xxvi_generate_pdf_html( $filepath, $fullname, $username, $signed_ts, $sig_png, $dob );
+        return;
+    }
+    // Fallback: FPDF (Latin-1, keine Umlaute/Emojis)
     if ( ! class_exists('FPDF') ) {
         require_once OEMM_XXVI_PATH . 'lib/fpdf.php';
     }
@@ -1068,16 +1308,18 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     $pdf->SetY(42);
 
     // ========== META BOX ==========
+    $dob_line_h = $dob ? 5 : 0;
     $pdf->SetFillColor(235, 241, 250);
     $pdf->SetDrawColor(200, 215, 240);
-    $pdf->Rect(20, 42, 170, 26, 'FD');
+    $pdf->Rect(20, 42, 170, 26 + $dob_line_h, 'FD');
     $pdf->SetXY(25, 45);
     $pdf->SetTextColor(15, 52, 96);
     $pdf->SetFont('Helvetica', 'B', 8);
     $pdf->Cell(32, 5, 'Teilnehmer:', 0, 0);
     $pdf->SetFont('Helvetica', '', 8);
     $pdf->SetTextColor(40, 40, 40);
-    $pdf->Cell(0, 5, $fullname . '  (@' . $username . ''), 0, 1);
+    $dob_suffix = $dob ? '  (geb. ' . iconv('UTF-8','ISO-8859-1//TRANSLIT', $dob) . ')' : '';
+    $pdf->Cell(0, 5, $fullname . $dob_suffix . '  (@' . $username . ')', 0, 1);
     $pdf->SetX(25);
     $pdf->SetFont('Helvetica', 'B', 8);
     $pdf->SetTextColor(15, 52, 96);
@@ -1106,7 +1348,7 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     $pdf->SetFont('Helvetica', 'B', 9);
     $pdf->Cell(28, 5, 'Teilnehmer:', 0, 0);
     $pdf->SetFont('Helvetica', '', 9);
-    $pdf->Cell(0, 5, $fullname . ' (@' . $username . ''), 0, 1);
+    $pdf->Cell(0, 5, $fullname . ' (@' . $username . ')', 0, 1);
     $pdf->SetX(24);
     $pdf->SetFont('Helvetica', 'B', 9);
     $pdf->Cell(28, 5, 'Veranstalter:', 0, 0);
@@ -1280,6 +1522,7 @@ function oemm_xxvi_admin_regen_pdf() {
     $username  = $u->user_login;
     $signed_ts = get_user_meta( $uid, '_oemm_ha_signed_ts', true ) ?: date('d.m.Y H:i:s');
     $sig_png   = get_user_meta( $uid, '_oemm_ha_sig_png',  true ) ?: '';
+    $dob_r     = get_user_meta( $uid, '_oemm_ha_dob', true ) ?: '';
 
     $upload   = wp_upload_dir();
     $dir      = trailingslashit( $upload['basedir'] ) . 'oemm-agreements/';
@@ -1287,7 +1530,7 @@ function oemm_xxvi_admin_regen_pdf() {
     $filename = 'ha-' . $uid . '.pdf';
     $filepath = $dir . $filename;
 
-    oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png );
+    oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png, $dob_r );
 
     $dl_url = add_query_arg( [
         'oemm_dl' => 1,
@@ -1315,6 +1558,208 @@ function oemm_xxvi_admin_menu() {
         'dashicons-tickets-alt',
         56
     );
+    add_submenu_page(
+        'oemm-xxvi-admin',
+        'Timetable',
+        '📅 Timetable',
+        'manage_options',
+        'oemm-xxvi-timetable',
+        'oemm_xxvi_timetable_admin_page'
+    );
+}
+
+// ---------------------------------------------------------------
+// TIMETABLE ADMIN
+// ---------------------------------------------------------------
+function oemm_xxvi_timetable_admin_page() {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    global $wpdb;
+    $tt = $wpdb->prefix . OEMM_XXVI_TIMETABLE;
+
+    // Tabelle anlegen falls noch nicht da (für bestehende Installs)
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    $charset = $wpdb->get_charset_collate();
+    dbDelta( "CREATE TABLE IF NOT EXISTS {$tt} (
+        id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        event_date  DATE NOT NULL,
+        start_time  TIME NOT NULL,
+        end_time    TIME DEFAULT NULL,
+        title       VARCHAR(255) NOT NULL,
+        subtitle    VARCHAR(255) DEFAULT NULL,
+        icon        VARCHAR(20) DEFAULT '📅',
+        category    VARCHAR(50) DEFAULT 'programm',
+        sort_order  INT UNSIGNED NOT NULL DEFAULT 0,
+        is_active   TINYINT(1) NOT NULL DEFAULT 1,
+        PRIMARY KEY (id),
+        KEY idx_date_time (event_date, start_time)
+    ) {$charset};" );
+
+    // Initialdaten falls leer
+    $count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$tt}" );
+    if ( $count === 0 ) {
+        $entries = [
+            [ '2026-06-25', '16:00:00', '22:00:00', 'Ausgabe der Startpakete', 'Eventgelände Sölden', '📦', 'logistik', 10 ],
+            [ '2026-06-26', '10:00:00', '22:00:00', 'Ausgabe der Startpakete', 'Eventgelände Sölden', '📦', 'logistik', 20 ],
+            [ '2026-06-26', '12:30:00', null,        'Start Gletscherausfahrt', null, '🏍', 'rennen', 30 ],
+            [ '2026-06-26', '19:30:00', null,        'Verbindliche Fahrerbesprechung', null, '📋', 'programm', 40 ],
+            [ '2026-06-26', '23:59:00', null,        'Veranstaltungsende', null, '🎉', 'programm', 50 ],
+            [ '2026-06-27', '06:00:00', null,        'Start Ötztaler Mopedmarathon XXVI', null, '🏁', 'rennen', 60 ],
+            [ '2026-06-27', '14:00:00', null,        'Ankunft der ersten Rider im Ziel', 'ca. 14:00 Uhr', '🥇', 'rennen', 70 ],
+            [ '2026-06-27', '17:30:00', null,        'Ankunft der letzten Rider im Ziel', null, '🏍', 'rennen', 80 ],
+            [ '2026-06-27', '21:00:00', null,        'Siegerehrung', null, '🏆', 'programm', 90 ],
+            [ '2026-06-27', '23:59:00', null,        'Veranstaltungsende', null, '🎉', 'programm', 100 ],
+        ];
+        foreach ( $entries as $e ) {
+            $wpdb->insert( $tt, [ 'event_date'=>$e[0], 'start_time'=>$e[1], 'end_time'=>$e[2],
+                'title'=>$e[3], 'subtitle'=>$e[4], 'icon'=>$e[5], 'category'=>$e[6], 'sort_order'=>$e[7], 'is_active'=>1 ] );
+        }
+    }
+
+    $action = $_GET['tt_action'] ?? '';
+    $msg = '';
+
+    // Löschen
+    if ( $action === 'delete' && isset( $_GET['id'] ) && check_admin_referer( 'oemm_tt_delete_' . (int)$_GET['id'] ) ) {
+        $wpdb->delete( $tt, [ 'id' => (int)$_GET['id'] ] );
+        $msg = 'Eintrag gelöscht.';
+    }
+    // Toggle aktiv
+    if ( $action === 'toggle' && isset( $_GET['id'] ) && check_admin_referer( 'oemm_tt_toggle_' . (int)$_GET['id'] ) ) {
+        $cur = $wpdb->get_var( $wpdb->prepare( "SELECT is_active FROM {$tt} WHERE id=%d", (int)$_GET['id'] ) );
+        $wpdb->update( $tt, [ 'is_active' => $cur ? 0 : 1 ], [ 'id' => (int)$_GET['id'] ] );
+        $msg = $cur ? 'Eintrag deaktiviert.' : 'Eintrag aktiviert.';
+    }
+    // Speichern (neu oder edit)
+    if ( $_SERVER['REQUEST_METHOD'] === 'POST' && isset( $_POST['oemm_tt_nonce'] ) && wp_verify_nonce( $_POST['oemm_tt_nonce'], 'oemm_tt_save' ) ) {
+        $data = [
+            'event_date' => sanitize_text_field( $_POST['event_date'] ),
+            'start_time' => sanitize_text_field( $_POST['start_time'] ),
+            'end_time'   => !empty( $_POST['end_time'] ) ? sanitize_text_field( $_POST['end_time'] ) : null,
+            'title'      => sanitize_text_field( $_POST['title'] ),
+            'subtitle'   => sanitize_text_field( $_POST['subtitle'] ),
+            'icon'       => sanitize_text_field( $_POST['icon'] ),
+            'category'   => sanitize_text_field( $_POST['category'] ),
+            'sort_order' => (int)$_POST['sort_order'],
+            'is_active'  => 1,
+        ];
+        if ( !empty( $_POST['edit_id'] ) ) {
+            $wpdb->update( $tt, $data, [ 'id' => (int)$_POST['edit_id'] ] );
+            $msg = 'Eintrag aktualisiert.';
+        } else {
+            $wpdb->insert( $tt, $data );
+            $msg = 'Eintrag hinzugefügt.';
+        }
+    }
+
+    $edit_item = null;
+    if ( $action === 'edit' && isset( $_GET['id'] ) ) {
+        $edit_item = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tt} WHERE id=%d", (int)$_GET['id'] ) );
+    }
+
+    $items = $wpdb->get_results( "SELECT * FROM {$tt} ORDER BY event_date, start_time, sort_order" );
+    $page_url = admin_url( 'admin.php?page=oemm-xxvi-timetable' );
+    ?>
+    <div class="wrap">
+    <h1>📅 ÖMM Timetable</h1>
+    <?php if ( $msg ) echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($msg) . '</p></div>'; ?>
+
+    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
+
+    <!-- LISTE -->
+    <div style="flex:1;min-width:400px;">
+    <table class="wp-list-table widefat fixed striped">
+    <thead><tr>
+        <th width="34">Icon</th>
+        <th width="90">Datum</th>
+        <th width="110">Zeit</th>
+        <th>Titel</th>
+        <th width="90">Kategorie</th>
+        <th width="50">Aktiv</th>
+        <th width="90">Aktionen</th>
+    </tr></thead>
+    <tbody>
+    <?php
+    $prev_date = '';
+    foreach ( $items as $item ) :
+        $date_label = date('D d.m.Y', strtotime($item->event_date));
+        $date_label = str_replace(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],['Mo','Di','Mi','Do','Fr','Sa','So'], $date_label);
+        if ( $item->event_date !== $prev_date ) {
+            echo '<tr><td colspan="7" class="column-primary" style="font-weight:700;background:#f0f0f1;border-top:2px solid #c3c4c7;">' . esc_html($date_label) . '</td></tr>';
+            $prev_date = $item->event_date;
+        }
+        $time_str = substr($item->start_time, 0, 5);
+        if ( $item->end_time ) $time_str .= ' – ' . substr($item->end_time, 0, 5);
+    ?>
+    <tr <?php echo !$item->is_active ? 'style="opacity:0.5;"' : ''; ?>>
+        <td style="font-size:18px;"><?php echo esc_html($item->icon); ?></td>
+        <td><?php echo esc_html($date_label); ?></td>
+        <td><code><?php echo esc_html($time_str); ?></code></td>
+        <td>
+            <strong><?php echo esc_html($item->title); ?></strong>
+            <?php if($item->subtitle) echo '<br><span class="description">'.esc_html($item->subtitle).'</span>'; ?>
+        </td>
+        <td><span class="dashicons-before"><?php echo esc_html(ucfirst($item->category)); ?></span></td>
+        <td style="text-align:center"><?php echo $item->is_active ? '<span style="color:green">&#10003;</span>' : '<span style="color:#aaa">&mdash;</span>'; ?></td>
+        <td>
+            <a href="<?php echo wp_nonce_url( $page_url . '&tt_action=edit&id=' . $item->id, 'oemm_tt_edit_' . $item->id ); ?>" class="button button-small">Bearbeiten</a>
+            <a href="<?php echo wp_nonce_url( $page_url . '&tt_action=toggle&id=' . $item->id, 'oemm_tt_toggle_' . $item->id ); ?>" class="button button-small"><?php echo $item->is_active ? 'Deaktivieren' : 'Aktivieren'; ?></a>
+            <a href="<?php echo wp_nonce_url( $page_url . '&tt_action=delete&id=' . $item->id, 'oemm_tt_delete_' . $item->id ); ?>" class="button button-small" onclick="return confirm('Wirklich löschen?')" style="color:#b32d2e;">Löschen</a>
+        </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+    </table>
+    </div>
+
+    <!-- FORMULAR -->
+    <div style="min-width:280px;max-width:340px;">
+    <div class="postbox">
+    <div class="postbox-header"><h2 class="hndle"><?php echo $edit_item ? 'Eintrag bearbeiten' : 'Neuer Eintrag'; ?></h2></div>
+    <div class="inside">
+    <form method="post" action="<?php echo esc_url($page_url); ?>">
+        <?php wp_nonce_field( 'oemm_tt_save', 'oemm_tt_nonce' ); ?>
+        <?php if ($edit_item) echo '<input type="hidden" name="edit_id" value="' . (int)$edit_item->id . '">'; ?>
+
+        <p><label><strong>Datum</strong><br>
+        <input type="date" name="event_date" value="<?php echo esc_attr($edit_item->event_date ?? '2026-06-26'); ?>" required class="widefat"></label></p>
+
+        <p><label><strong>Startzeit</strong><br>
+        <input type="time" name="start_time" value="<?php echo esc_attr($edit_item ? substr($edit_item->start_time,0,5) : ''); ?>" required class="widefat"></label></p>
+
+        <p><label><strong>Endzeit</strong> <span class="description">(optional)</span><br>
+        <input type="time" name="end_time" value="<?php echo esc_attr($edit_item && $edit_item->end_time ? substr($edit_item->end_time,0,5) : ''); ?>" class="widefat"></label></p>
+
+        <p><label><strong>Titel</strong><br>
+        <input type="text" name="title" value="<?php echo esc_attr($edit_item->title ?? ''); ?>" required class="widefat"></label></p>
+
+        <p><label><strong>Untertitel</strong> <span class="description">(optional)</span><br>
+        <input type="text" name="subtitle" value="<?php echo esc_attr($edit_item->subtitle ?? ''); ?>" class="widefat"></label></p>
+
+        <p><label><strong>Icon</strong> <span class="description">(Emoji)</span><br>
+        <input type="text" name="icon" value="<?php echo esc_attr($edit_item->icon ?? '🎵'); ?>" style="width:60px;font-size:20px;"></label></p>
+
+        <p><label><strong>Kategorie</strong><br>
+        <select name="category" class="widefat">
+        <?php foreach(['programm','rennen','logistik','musik','sonstiges'] as $cat) :
+            $sel = ($edit_item && $edit_item->category===$cat) ? 'selected' : ''; ?>
+        <option value="<?php echo $cat; ?>" <?php echo $sel; ?>><?php echo ucfirst($cat); ?></option>
+        <?php endforeach; ?>
+        </select></label></p>
+
+        <p><label><strong>Reihenfolge</strong><br>
+        <input type="number" name="sort_order" value="<?php echo esc_attr($edit_item->sort_order ?? 50); ?>" style="width:80px"></label></p>
+
+        <?php submit_button( $edit_item ? 'Speichern' : 'Hinzufügen' ); ?>
+        <?php if ($edit_item) : ?>
+        <p><a href="<?php echo esc_url($page_url); ?>" class="button">Abbrechen</a></p>
+        <?php endif; ?>
+    </form>
+    </div></div><!-- /postbox -->
+    </div><!-- /formular -->
+
+    </div><!-- /flex -->
+    </div><!-- /wrap -->
+    <?php
 }
 function oemm_xxvi_admin_page() {
     if ( ! current_user_can( 'manage_options' ) ) return;
@@ -1348,17 +1793,38 @@ function oemm_xxvi_admin_page() {
         $uid = absint( $_GET['regen'] );
         $u2  = get_user_by( 'id', $uid );
         if ( $u2 ) {
-            $fn  = trim( $u2->first_name . ' ' . $u2->last_name ) ?: $u2->display_name;
-            $ts  = get_user_meta( $uid, '_oemm_ha_signed_ts', true ) ?: date( 'd.m.Y H:i:s' );
-            $sig = get_user_meta( $uid, '_oemm_ha_sig_png', true ) ?: '';
+            $fn    = trim( $u2->first_name . ' ' . $u2->last_name ) ?: $u2->display_name;
+            $ts    = get_user_meta( $uid, '_oemm_ha_signed_ts', true ) ?: date( 'd.m.Y H:i:s' );
+            $sig   = get_user_meta( $uid, '_oemm_ha_sig_png', true ) ?: '';
+            $dob_a = get_user_meta( $uid, '_oemm_ha_dob', true ) ?: '';
             $dir = trailingslashit( wp_upload_dir()['basedir'] ) . 'oemm-agreements/';
             wp_mkdir_p( $dir );
             $fp  = $dir . 'ha-' . $uid . '.pdf';
-            oemm_xxvi_generate_pdf( $fp, $fn, $u2->user_login, $ts, $sig );
+            oemm_xxvi_generate_pdf( $fp, $fn, $u2->user_login, $ts, $sig, $dob_a );
             $dlurl = add_query_arg( [ 'oemm_dl' => 1, 'uid' => $uid, 'token' => hash( 'sha256', AUTH_KEY . $uid . basename($fp) ) ], home_url('/') );
             update_user_meta( $uid, '_oemm_ha_dl_file', $fp );
             update_user_meta( $uid, '_oemm_ha_dl_url', $dlurl );
         }
+        wp_safe_redirect( add_query_arg( ['tab' => 'ha', 'regen_ok' => $uid], admin_url('admin.php?page=oemm-xxvi-admin') ) ); exit;
+    }
+
+    // HA Reset einzelner User
+    if ( ! empty( $_GET['ha_reset'] ) && check_admin_referer( 'oemm_ha_reset_' . (int) $_GET['ha_reset'] ) ) {
+        $uid = absint( $_GET['ha_reset'] );
+        global $wpdb;
+        $wpdb->delete( $wpdb->prefix . OEMM_XXVI_TABLE, [ 'user_id' => $uid ], [ '%d' ] );
+        foreach ( ['_oemm_ha_signed_ts','_oemm_ha_dl_file','_oemm_ha_dl_url','_oemm_ha_sig_png','_oemm_ha_dob'] as $mk ) {
+            delete_user_meta( $uid, $mk );
+        }
+        wp_safe_redirect( add_query_arg( ['tab' => 'ha', 'reset_ok' => $uid], admin_url('admin.php?page=oemm-xxvi-admin') ) ); exit;
+    }
+
+    // HA Reset ALLE User
+    if ( ! empty( $_POST['ha_reset_all'] ) && check_admin_referer( 'oemm_ha_reset_all', 'ha_reset_all_nonce' ) ) {
+        global $wpdb;
+        $wpdb->query( 'TRUNCATE TABLE ' . $wpdb->prefix . OEMM_XXVI_TABLE );
+        $wpdb->query( "DELETE FROM {$wpdb->usermeta} WHERE meta_key IN ('_oemm_ha_signed_ts','_oemm_ha_dl_file','_oemm_ha_dl_url','_oemm_ha_sig_png','_oemm_ha_dob')" );
+        wp_safe_redirect( add_query_arg( ['tab' => 'ha', 'reset_all_ok' => 1], admin_url('admin.php?page=oemm-xxvi-admin') ) ); exit;
     }
 
     global $wpdb;
@@ -1419,6 +1885,7 @@ function oemm_xxvi_admin_page() {
         <a href="<?php echo esc_url(add_query_arg('tab','settings',$page_url)); ?>" class="nav-tab <?php echo $tab==='settings'?'nav-tab-active':''; ?>">⚙️ Einstellungen</a>
         <a href="<?php echo esc_url(add_query_arg('tab','stats',$page_url)); ?>" class="nav-tab <?php echo $tab==='stats'?'nav-tab-active':''; ?>">📊 Statistiken</a>
         <a href="<?php echo esc_url(add_query_arg('tab','users',$page_url)); ?>" class="nav-tab <?php echo $tab==='users'?'nav-tab-active':''; ?>">👥 Teilnehmer</a>
+        <a href="<?php echo esc_url(add_query_arg('tab','ha',$page_url)); ?>" class="nav-tab <?php echo $tab==='ha'?'nav-tab-active':''; ?>">📝 Haftungsausschlüsse</a>
         <a href="<?php echo esc_url(add_query_arg('tab','diagnose',$page_url)); ?>" class="nav-tab <?php echo $tab==='diagnose'?'nav-tab-active':''; ?>">🔧 Diagnose</a>
     </nav>
 
@@ -1532,6 +1999,116 @@ function oemm_xxvi_admin_page() {
         </tbody>
     </table>
     <?php endif; ?>
+
+    <?php elseif ( $tab === 'ha' ) : ?>
+    <!-- ==================== HAFTUNGSAUSSCHLUESSE ==================== -->
+    <h2>📝 Haftungsausschlüsse ÖMM <?php echo $event_year; ?></h2>
+    <?php
+    if ( ! empty($_GET['reset_ok']) )    { $ru=get_user_by('id',absint($_GET['reset_ok']));    echo '<div class="notice notice-success is-dismissible"><p>HA von <strong>'.esc_html($ru->display_name??'User').'</strong> zurückgesetzt.</p></div>'; }
+    if ( ! empty($_GET['reset_all_ok']) ) echo '<div class="notice notice-warning is-dismissible"><p><strong>Alle</strong> HA-Unterschriften zurückgesetzt.</p></div>';
+    if ( ! empty($_GET['regen_ok']) )    { $ru=get_user_by('id',absint($_GET['regen_ok']));    echo '<div class="notice notice-success is-dismissible"><p>PDF für <strong>'.esc_html($ru->display_name??'User').'</strong> neu generiert.</p></div>'; }
+
+    $ha_table       = $wpdb->prefix . OEMM_XXVI_TABLE;
+    $parts_table    = $wpdb->prefix . 'oemm_participants';
+    // Nur aktive Teilnehmer 2026 (bezahlt = in oemm_participants)
+    $participant_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT customer_id FROM {$parts_table} WHERE event_year = %d ORDER BY startnumber+0 ASC",
+        $event_year
+    ) );
+    $all_customers  = empty($participant_ids) ? [] : get_users( [
+        'include'  => $participant_ids,
+        'orderby'  => 'display_name',
+        'number'   => -1,
+    ] );
+    $signed_rows    = $wpdb->get_results( "SELECT user_id, fullname, username, geburtsdatum, signed_at_ts FROM {$ha_table} ORDER BY signed_at DESC" );
+    $signed_map     = [];
+    foreach ( $signed_rows as $row ) $signed_map[$row->user_id] = $row;
+    // Nur Unterschriften von aktiven Teilnehmern zählen
+    $participant_id_set = array_flip( array_map('intval', $participant_ids) );
+    $signed_count   = 0;
+    $signed_rows_filtered = [];
+    foreach ( $signed_rows as $row ) {
+        if ( isset($participant_id_set[(int)$row->user_id]) ) {
+            $signed_count++;
+            $signed_rows_filtered[] = $row;
+        }
+    }
+    $unsigned_count = 0;
+    foreach ( $all_customers as $c ) { if ( ! isset($signed_map[$c->ID]) ) $unsigned_count++; }
+    ?>
+    <div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+        <div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:16px 24px;text-align:center;min-width:120px"><div style="font-size:28px;font-weight:700;color:#155724"><?php echo $signed_count; ?></div><div style="font-size:12px;color:#155724">✅ Unterschrieben</div></div>
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:16px 24px;text-align:center;min-width:120px"><div style="font-size:28px;font-weight:700;color:#856404"><?php echo $unsigned_count; ?></div><div style="font-size:12px;color:#856404">⏳ Noch offen</div></div>
+        <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px 24px;text-align:center;min-width:120px"><div style="font-size:28px;font-weight:700;color:#495057"><?php echo count($all_customers); ?></div><div style="font-size:12px;color:#495057">🏍 Teilnehmer <?php echo $event_year; ?></div></div>
+    </div>
+    <?php
+    $total_parts  = count($all_customers);
+    $pct          = $total_parts > 0 ? round($signed_count / $total_parts * 100) : 0;
+    $bar_color    = $pct < 30 ? '#f87171' : ($pct < 70 ? '#f0c040' : '#4ade80');
+    ?>
+    <div style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px 20px;margin-bottom:20px;max-width:600px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:600;color:#333">Fortschritt Haftungsausschlüsse</span>
+            <span style="font-size:18px;font-weight:700;color:<?php echo $bar_color; ?>"><?php echo $pct; ?>%</span>
+        </div>
+        <div style="background:#eee;border-radius:8px;height:14px;overflow:hidden;">
+            <div style="width:<?php echo $pct; ?>%;height:100%;background:<?php echo $bar_color; ?>;border-radius:8px;transition:width .4s;"></div>
+        </div>
+        <div style="font-size:12px;color:#888;margin-top:6px;"><?php echo $signed_count; ?> von <?php echo $total_parts; ?> Teilnehmern haben unterschrieben</div>
+    </div>
+    <h3>✅ Bereits unterschrieben (<?php echo $signed_count; ?>)</h3>
+    <?php if ( $signed_count > 0 ) : ?>
+    <table class="widefat striped" style="margin-bottom:30px">
+        <thead><tr><th>Name</th><th>Benutzername</th><th>Geburtsdatum</th><th>Unterzeichnet am</th><th>PDF</th><th>Aktionen</th></tr></thead>
+        <tbody>
+        <?php foreach ( $signed_rows_filtered as $row ) :
+            $dl_file   = get_user_meta( $row->user_id, '_oemm_ha_dl_file', true );
+            $pdf_ok    = $dl_file && file_exists($dl_file) && filesize($dl_file) > 500;
+            // Admin-Download-URL (kein Token nötig, Admin-Check im Handler)
+            $admin_dl_url = add_query_arg( ['oemm_dl' => 1, 'uid' => $row->user_id, 'token' => '', 'adm' => 1], home_url('/') );
+            $regen_url = wp_nonce_url( add_query_arg(['tab'=>'ha','regen'=>$row->user_id], $page_url), 'oemm_regen_'.$row->user_id );
+            $reset_url = wp_nonce_url( add_query_arg(['tab'=>'ha','ha_reset'=>$row->user_id], $page_url), 'oemm_ha_reset_'.$row->user_id );
+        ?>
+        <tr>
+            <td><strong><?php echo esc_html($row->fullname); ?></strong></td>
+            <td style="color:#666">@<?php echo esc_html($row->username); ?></td>
+            <td><?php echo $row->geburtsdatum ? esc_html($row->geburtsdatum) : '<span style="color:#ccc">—</span>'; ?></td>
+            <td style="font-size:12px"><?php echo esc_html($row->signed_at_ts); ?></td>
+            <td><?php if($pdf_ok): ?><a href="<?php echo esc_url($admin_dl_url); ?>" target="_blank" style="background:#0073aa;color:#fff;padding:4px 10px;border-radius:4px;text-decoration:none;font-size:12px;font-weight:600">⬇ PDF</a><?php else: ?><a href="<?php echo esc_url($regen_url); ?>" style="background:#f59e0b;color:#fff;padding:4px 10px;border-radius:4px;text-decoration:none;font-size:12px">🔄 Generieren</a><?php endif; ?></td>
+            <td style="white-space:nowrap">
+                <?php if($pdf_ok): ?><a href="<?php echo esc_url($regen_url); ?>" style="font-size:12px;color:#0073aa;margin-right:8px">🔄 PDF neu</a><?php endif; ?>
+                <a href="<?php echo esc_url($reset_url); ?>" style="font-size:12px;color:#d63638" onclick="return confirm('HA von <?php echo esc_js($row->fullname); ?> zurücksetzen?')"> ❌ Reset</a>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php else : ?><p style="color:#666;margin-bottom:30px">Noch keine Unterschriften.</p><?php endif; ?>
+
+    <h3>⏳ Noch nicht unterschrieben (<?php echo $unsigned_count; ?>)</h3>
+    <?php if($unsigned_count>0): ?>
+    <table class="widefat striped" style="margin-bottom:30px">
+        <thead><tr><th>Name</th><th>Benutzername</th><th>E-Mail</th></tr></thead>
+        <tbody>
+        <?php foreach($all_customers as $c): if(isset($signed_map[$c->ID])) continue;
+            $cname=trim($c->first_name.' '.$c->last_name)?:$c->display_name; ?>
+        <tr><td><?php echo esc_html($cname); ?></td><td style="color:#666">@<?php echo esc_html($c->user_login); ?></td><td style="color:#888;font-size:12px"><?php echo esc_html($c->user_email); ?></td></tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
+
+    <div style="background:#fff5f5;border:2px solid #d63638;border-radius:8px;padding:20px;max-width:600px">
+        <h3 style="color:#d63638;margin-top:0">🚨 Alle Haftungsausschlüsse zurücksetzen</h3>
+        <p style="color:#555;margin-bottom:16px">Alle Unterschriften zurücksetzen — alle User müssen erneut unterzeichnen.</p>
+        <form method="post"><?php wp_nonce_field('oemm_ha_reset_all','ha_reset_all_nonce'); ?>
+            <button type="submit" name="ha_reset_all" value="1"
+                style="background:#d63638;color:#fff;border:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer"
+                onclick="return confirm('⚠️ ACHTUNG: Alle HA-Unterschriften werden zurückgesetzt!\n\nWirklich fortfahren?')">
+                🚨 Alle Unterschriften zurücksetzen
+            </button>
+        </form>
+    </div>
 
     <?php elseif ( $tab === 'diagnose' ) : ?>
     <!-- ==================== DIAGNOSE ==================== -->
