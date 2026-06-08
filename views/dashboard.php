@@ -219,10 +219,11 @@ function oemm_status_badge( $status ) {
     .oemm-card-body { flex-direction: column; gap: 16px; }
     .oemm-vdivider { display: none; }
     .oemm-sn-number { font-size: 70px; }
-    .cards-grid { grid-template-columns: 1fr 1fr; }
+    .cards-grid { display: none; }
     .order-date { display: none; }
-    .countdown-grid { gap: 10px !important; }
-    .two-col-grid { grid-template-columns: 1fr !important; }
+    .countdown-grid { gap: 6px !important; }
+    .two-col-grid { display: none !important; }
+    .oemm-last-orders { display: none !important; }
     /* Ticket Mobile */
     .oemm-ticket-inner { flex-direction: column !important; }
     .oemm-ticket-left {
@@ -242,14 +243,34 @@ function oemm_status_badge( $status ) {
 
 <!-- HA STATUS -->
 <?php if ( $ha_signed ) : ?>
-<div style="display:flex;align-items:center;gap:12px;padding:13px 18px;background:rgba(74,222,128,0.07);border:1px solid rgba(74,222,128,0.18);border-radius:12px;margin-bottom:18px;">
+<div id="oemm-ha-banner" style="display:flex;align-items:center;gap:12px;padding:13px 18px;background:rgba(74,222,128,0.07);border:1px solid rgba(74,222,128,0.18);border-radius:12px;margin-bottom:18px;">
   <span style="font-size:18px">✅</span>
   <div style="flex:1;">
     <div style="font-size:13px;color:#4ade80;font-weight:500;">Haftungsausschluss unterzeichnet</div>
     <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">Unterzeichnet am <?php echo esc_html($ha_signed); ?></div>
   </div>
-  <a href="<?php echo esc_url( wc_get_account_endpoint_url('haftungsausschluss') ); ?>" style="font-size:11px;color:rgba(255,255,255,0.2);text-decoration:none;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:0.5px;">Ansehen</a>
+  <a href="<?php echo esc_url( wc_get_account_endpoint_url('haftungsausschluss') ); ?>"
+     onclick="ommDismissHA(event)"
+     style="font-size:12px;color:rgba(255,255,255,0.75);text-decoration:none;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:0.5px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);padding:5px 12px;border-radius:7px;transition:all .15s;">Ansehen →</a>
 </div>
+<div id="oemm-ha-dismissed" style="display:none;padding:10px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:18px;font-size:12px;color:rgba(255,255,255,0.3);text-align:center;">
+  ✅ Haftungsausschluss unterzeichnet — <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" style="color:rgba(255,255,255,0.45);text-decoration:none;">Im Downloadbereich verfügbar ↗</a>
+</div>
+<script>
+(function(){
+  var uid = '<?php echo esc_js((string)$user->ID); ?>';
+  var key = 'oemm_ha_dismissed_' + uid;
+  if (localStorage.getItem(key)) {
+    document.getElementById('oemm-ha-banner').style.display = 'none';
+    document.getElementById('oemm-ha-dismissed').style.display = 'block';
+  }
+})();
+function ommDismissHA(e) {
+  var uid = '<?php echo esc_js((string)$user->ID); ?>';
+  localStorage.setItem('oemm_ha_dismissed_' + uid, '1');
+  // Navigation trotzdem ausführen - kein preventDefault
+}
+</script>
 <?php endif; ?>
 
 <!-- TICKET CARD -->
@@ -314,10 +335,26 @@ function oemm_status_badge( $status ) {
     <div class="glass-card-header"><h3>Event Countdown</h3></div>
     <div style="padding:20px 22px;text-align:center;">
       <div style="font-size:11px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.3);margin-bottom:10px;">ÖMM 2026 — 26. Juni</div>
-      <div class="countdown-grid" style="display:flex;justify-content:center;gap:16px;">
-        <div style="text-align:center"><span id="cd-days" style="font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:#f0c040;display:block;line-height:1">--</span><span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px">Tage</span></div>
-        <div style="text-align:center"><span id="cd-hours" style="font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:rgba(255,255,255,0.7);display:block;line-height:1">--</span><span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px">Std</span></div>
-        <div style="text-align:center"><span id="cd-mins" style="font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:rgba(255,255,255,0.5);display:block;line-height:1">--</span><span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px">Min</span></div>
+      <div class="countdown-grid" style="display:flex;justify-content:center;gap:12px;align-items:baseline;">
+        <div style="text-align:center">
+          <span style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:rgba(255,255,255,0.4);line-height:1">-</span><span id="cd-days" style="font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:#f0c040;display:inline;line-height:1">--</span>
+          <span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px;display:block">Tage</span>
+        </div>
+        <span style="font-family:'Oswald',sans-serif;font-size:28px;color:rgba(255,255,255,0.2);margin-bottom:14px">:</span>
+        <div style="text-align:center">
+          <span id="cd-hours" style="font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:rgba(255,255,255,0.7);display:block;line-height:1">--</span>
+          <span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px">Std</span>
+        </div>
+        <span style="font-family:'Oswald',sans-serif;font-size:28px;color:rgba(255,255,255,0.2);margin-bottom:14px">:</span>
+        <div style="text-align:center">
+          <span id="cd-mins" style="font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:rgba(255,255,255,0.5);display:block;line-height:1">--</span>
+          <span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px">Min</span>
+        </div>
+        <span style="font-family:'Oswald',sans-serif;font-size:28px;color:rgba(255,255,255,0.2);margin-bottom:14px">:</span>
+        <div style="text-align:center">
+          <span id="cd-secs" style="font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:rgba(255,255,255,0.3);display:block;line-height:1">--</span>
+          <span style="font-size:10px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px">Sek</span>
+        </div>
       </div>
     </div>
   </div>
@@ -344,7 +381,7 @@ function oemm_status_badge( $status ) {
 </div>
 
 <!-- LETZTE BESTELLUNGEN -->
-<div class="glass-card">
+<div class="glass-card oemm-last-orders">
   <div class="glass-card-header">
     <h3>Letzte Bestellungen</h3>
     <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-bestellungen') ); ?>">Alle anzeigen →</a>
@@ -372,10 +409,15 @@ function oemm_status_badge( $status ) {
   function updateCountdown() {
     var diff = new Date('2026-06-26T08:00:00') - new Date();
     if (diff <= 0) { document.getElementById('cd-days').textContent='0'; return; }
-    document.getElementById('cd-days').textContent = Math.floor(diff/86400000);
-    document.getElementById('cd-hours').textContent = String(Math.floor((diff%86400000)/3600000)).padStart(2,'0');
-    document.getElementById('cd-mins').textContent = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    var d = Math.floor(diff/86400000);
+    var h = String(Math.floor((diff%86400000)/3600000)).padStart(2,'0');
+    var m = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    var s = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+    document.getElementById('cd-days').textContent  = d;
+    document.getElementById('cd-hours').textContent = h;
+    document.getElementById('cd-mins').textContent  = m;
+    document.getElementById('cd-secs').textContent  = s;
   }
-  updateCountdown(); setInterval(updateCountdown, 60000);
+  updateCountdown(); setInterval(updateCountdown, 1000);
 })();
 </script>
