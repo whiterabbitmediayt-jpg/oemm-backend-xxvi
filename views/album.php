@@ -35,8 +35,8 @@ $fotos_table = $wpdb->prefix . 'oemm_xxvi_fotos';
 $likes_table = $wpdb->prefix . 'oemm_xxvi_foto_likes';
 
 $fotos = [];
-$fotos_table_exists = ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $fotos_table ) ) === $fotos_table );
-$likes_table_exists  = ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $likes_table ) ) === $likes_table );
+$fotos_table_exists = ( $wpdb->get_var( "SHOW TABLES LIKE '{$fotos_table}'" ) === $fotos_table );
+$likes_table_exists  = ( $wpdb->get_var( "SHOW TABLES LIKE '{$likes_table}'" ) === $likes_table );
 
 if ( $fotos_table_exists ) {
     if ( $likes_table_exists ) {
@@ -48,11 +48,10 @@ if ( $fotos_table_exists ) {
              FROM {$fotos_table} f
              LEFT JOIN {$wpdb->users} u ON u.ID = f.user_id
              WHERE f.is_public = 1 AND f.event_year = %d
-             ORDER BY f.like_count DESC, f.shot_at ASC",
+             ORDER BY (SELECT COUNT(*) FROM {$likes_table} l2 WHERE l2.foto_id = f.id) DESC, f.shot_at ASC",
             $user->ID, $event_year
         ) );
     } else {
-        // Likes-Tabelle noch nicht vorhanden (Migration ausstehend) → ohne Likes laden
         $fotos = $wpdb->get_results( $wpdb->prepare(
             "SELECT f.*, u.display_name AS owner_name, 0 AS like_count, 0 AS user_liked
              FROM {$fotos_table} f

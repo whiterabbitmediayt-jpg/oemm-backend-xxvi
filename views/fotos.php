@@ -8,7 +8,7 @@ $fotos_table = $wpdb->prefix . 'oemm_xxvi_fotos';
 $likes_table = $wpdb->prefix . 'oemm_xxvi_foto_likes';
 
 $fotos = [];
-if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $fotos_table ) ) === $fotos_table ) {
+if ( $wpdb->get_var( "SHOW TABLES LIKE '{$fotos_table}'" ) === $fotos_table ) {
     $fotos = $wpdb->get_results( $wpdb->prepare(
         "SELECT f.*,
                 (SELECT COUNT(*) FROM {$likes_table} l WHERE l.foto_id = f.id) AS like_count,
