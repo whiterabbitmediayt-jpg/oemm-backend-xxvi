@@ -46,6 +46,16 @@ html, body {
 .entry-header,.entry-footer,.page-header,.main-navigation,nav.navigation,.nav-menu,
 .woocommerce-account .woocommerce,
 .woocommerce-account .woocommerce-MyAccount-content { display:none !important; }
+/* Cookie Banner ausblenden (einmal akzeptiert reicht) */
+#cookie-notice,.cn-notice,.cookie-notice-container,
+#cookie-law-info-bar,.cli-bar-container,.cli_messagebar,
+.cc-window,.cc-banner,.cc-grower,
+.cookielawinfo-bar,#cookielawinfo-cookie-consent,
+.moove-gdpr-info-bar,#moove_gdpr_cookie_info_bar,
+.gdpr-cookie-notice,.gdpr-cookie-banner,
+[id*="cookie"],[class*="cookie-bar"],[class*="cookie-consent"],
+[class*="cookie-notice"],[class*="cookie-policy"],
+[id*="cookie-notice"],[id*="cookie-banner"],[id*="cookie-consent"] { display:none !important; }
 .site-main,main#main,#content,.content-area,.woocommerce-page,.woocommerce {
   padding:0!important;margin:0!important;background:transparent!important;
   border:none!important;max-width:100%!important;width:100%!important;

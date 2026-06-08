@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.9
+ * Version:     2.3.10
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.9' );
+define( 'OEMM_XXVI_VERSION', '2.3.10' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -1035,13 +1035,16 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     if ( ! class_exists('tFPDF') ) {
         require_once OEMM_XXVI_PATH . 'lib/tfpdf.php';
     }
+    // tFPDF fontpath via define setzen (protected property, nur so von außen setzbar)
+    if ( ! defined('FPDF_FONTPATH') ) {
+        define( 'FPDF_FONTPATH', OEMM_XXVI_PATH . 'lib/' );
+    }
 
     $pdf = new tFPDF('P', 'mm', 'A4');
     $pdf->SetAutoPageBreak(true, 18);
     $pdf->SetMargins(20, 20, 20);
 
-    // UTF-8 Fonts registrieren (tFPDF sucht in fontpath/unifont/)
-    $pdf->fontpath = OEMM_XXVI_PATH . 'lib/';
+    // UTF-8 Fonts registrieren (tFPDF sucht in FPDF_FONTPATH/unifont/)
     $pdf->AddFont('DejaVu', '',  'DejaVuSans.ttf',      true);
     $pdf->AddFont('DejaVu', 'B', 'DejaVuSans-Bold.ttf', true);
 
