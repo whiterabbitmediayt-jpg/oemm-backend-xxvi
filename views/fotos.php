@@ -56,6 +56,8 @@ $fotos_json = array_map( function( $f ) {
 .omm-btn-like:hover,.omm-btn-like.liked{background:rgba(239,68,68,.45);color:#ff6b6b}
 .omm-btn-delete{background:rgba(239,68,68,.18);color:#f87171;border:1px solid rgba(239,68,68,.3)}
 .omm-btn-delete:hover{background:rgba(239,68,68,.55);color:#fff}
+.omm-btn-download{background:rgba(240,192,64,.15);color:#f0c040;border:1px solid rgba(240,192,64,.25)}
+.omm-btn-download:hover{background:rgba(240,192,64,.35);color:#fff}
 /* Delete Confirm Overlay */
 #ommDeleteModal{display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.8);align-items:center;justify-content:center}
 #ommDeleteModal.open{display:flex}
@@ -148,6 +150,13 @@ $fotos_json = array_map( function( $f ) {
                 data-foto-id="<?php echo (int)$foto->id; ?>">
             ❤️ <span class="like-count"><?php echo $like_count; ?></span>
         </button>
+        <a class="omm-foto-btn omm-btn-download omm-dl-foto"
+           href="<?php echo esc_url( oemm_xxvi_fotos_get_serve_url( (int)$foto->id, (int)$foto->user_id ) ); ?>&dl=1"
+           download
+           title="Foto herunterladen"
+           onclick="event.stopPropagation()">
+            ⬇️
+        </a>
         <button class="omm-foto-btn omm-btn-delete omm-delete-foto"
                 data-foto-id="<?php echo (int)$foto->id; ?>"
                 title="Foto löschen">
@@ -289,6 +298,15 @@ $fotos_json = array_map( function( $f ) {
         });
         lbAct.appendChild(likeBtn);
 
+        const dlBtn = document.createElement('a');
+        dlBtn.id = 'lbDlBtn';
+        dlBtn.className = 'omm-foto-btn omm-btn-download';
+        dlBtn.title = 'Foto herunterladen';
+        dlBtn.textContent = '\u2b07\ufe0f';
+        dlBtn.setAttribute('download', '');
+        dlBtn.href = FOTOS[lbIdx] ? FOTOS[lbIdx].url + '&dl=1' : '#';
+        lbAct.appendChild(dlBtn);
+
         const delBtn = document.createElement('button');
         delBtn.id = 'lbDelBtn';
         delBtn.className = 'omm-foto-btn omm-btn-delete';
@@ -341,11 +359,13 @@ $fotos_json = array_map( function( $f ) {
         const f = FOTOS[lbIdx];
         const pb = document.getElementById('lbPubBtn');
         const lk = document.getElementById('lbLikeBtn');
+        const dl = document.getElementById('lbDlBtn');
         if (!pb || !lk || !f) return;
         pb.className = 'omm-foto-btn ' + (f.is_public ? 'omm-btn-public' : 'omm-btn-private');
         pb.textContent = f.is_public ? '🌍 Öffentlich' : '🔒 Privat';
         lk.className = 'omm-foto-btn omm-btn-like' + (f.user_liked ? ' liked' : '');
         lk.innerHTML = '❤️ <span>' + f.like_count + '</span>';
+        if (dl) dl.href = f.url + '&dl=1';
     }
 
     function goLb(idx) {

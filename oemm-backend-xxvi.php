@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.18
+ * Version:     2.3.19
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.18' );
+define( 'OEMM_XXVI_VERSION', '2.3.19' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -323,10 +323,16 @@ function oemm_xxvi_fotos_serve(): void {
     if ( ! file_exists( $filepath ) ) wp_die( 'Datei nicht gefunden.', 404 );
 
     $mime = mime_content_type( $filepath ) ?: 'image/jpeg';
+    $ext  = ( $mime === 'image/png' ) ? 'png' : 'jpg';
     header( 'Content-Type: ' . $mime );
     header( 'Content-Length: ' . filesize( $filepath ) );
     header( 'Cache-Control: private, max-age=3600' );
     header( 'X-Content-Type-Options: nosniff' );
+    // &dl=1 => Datei herunterladen statt im Browser anzeigen
+    if ( ! empty( $_GET['dl'] ) ) {
+        $dl_name = 'oemm_foto_' . (int) $foto->id . '.' . $ext;
+        header( 'Content-Disposition: attachment; filename="' . $dl_name . '"' );
+    }
     readfile( $filepath );
     exit;
 }
