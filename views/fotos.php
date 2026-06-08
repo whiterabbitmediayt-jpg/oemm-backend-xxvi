@@ -80,13 +80,20 @@ $fotos_json = array_map( function( $f ) {
 #ommPreviewGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.1);transition:opacity .3s}
 #ommPreviewGrid .omm-prev-err{width:100%;aspect-ratio:1;background:rgba(239,68,68,.15);border-radius:6px;border:1px solid rgba(239,68,68,.3);display:flex;align-items:center;justify-content:center;font-size:10px;color:#f87171;text-align:center;padding:4px}
 /* Upload-Animationen */
-.omm-prev-uploading{position:relative;border-radius:6px;overflow:hidden}
-.omm-prev-uploading::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(240,192,64,.5) 50%,transparent 100%);background-size:200% 100%;animation:ommShimmer 1s infinite linear;border-radius:6px}
-@keyframes ommShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.omm-prev-done{position:relative;border-radius:6px;overflow:hidden}
-.omm-prev-done::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;background:rgba(74,222,128,.55);animation:ommCheckPop .35s cubic-bezier(.34,1.56,.64,1) forwards}
-@keyframes ommCheckPop{0%{opacity:0;transform:scale(.4)}100%{opacity:1;transform:scale(1)}}
-.omm-prev-fail::after{content:'❌';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:rgba(239,68,68,.55)}
+.omm-prev-wrap{position:relative;border-radius:6px;overflow:hidden;aspect-ratio:1}
+.omm-prev-wrap img{width:100%;height:100%;object-fit:cover;display:block;transition:opacity .3s}
+.omm-prev-uploading img{opacity:.45}
+.omm-prev-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+/* Spinner */
+.omm-spinner{width:32px;height:32px;border:3px solid rgba(240,192,64,.25);border-top-color:#f0c040;border-radius:50%;animation:ommSpin .7s linear infinite}
+@keyframes ommSpin{to{transform:rotate(360deg)}}
+/* Done */
+.omm-prev-done-icon{font-size:28px;animation:ommCheckPop .35s cubic-bezier(.34,1.56,.64,1) forwards;opacity:0}
+@keyframes ommCheckPop{0%{opacity:0;transform:scale(.3)}100%{opacity:1;transform:scale(1)}}
+/* Fail */
+.omm-prev-fail img{opacity:.3}
+.omm-prev-fail-icon{font-size:24px}
+#ommPreviewGrid .omm-prev-err{aspect-ratio:1;background:rgba(239,68,68,.15);border-radius:6px;border:1px solid rgba(239,68,68,.3);display:flex;align-items:center;justify-content:center;font-size:10px;color:#f87171;text-align:center;padding:4px}
 
 .omm-public-toggle{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;user-select:none}
 .omm-public-toggle input{width:18px;height:18px;cursor:pointer;accent-color:#f0c040}
@@ -733,11 +740,18 @@ $fotos_json = array_map( function( $f ) {
                 return;
             }
             _selectedFiles.push(file);
+            // Wrapper + Bild
+            const wrap = document.createElement('div');
+            wrap.className = 'omm-prev-wrap';
             const img = document.createElement('img');
+            const overlay = document.createElement('div');
+            overlay.className = 'omm-prev-overlay';
+            wrap.appendChild(img);
+            wrap.appendChild(overlay);
             const reader = new FileReader();
             reader.onload = function(e){ img.src = e.target.result; };
             reader.readAsDataURL(file);
-            previewGrid.appendChild(img);
+            previewGrid.appendChild(wrap);
         });
 
         if (_selectedFiles.length > 0 || errors > 0) {
@@ -796,9 +810,13 @@ $fotos_json = array_map( function( $f ) {
             uploadMsg.textContent = 'Foto ' + (idx+1) + ' von ' + total + ' — ' + file.name;
             uploadMsg.style.color = 'rgba(255,255,255,.5)';
 
-            // Shimmer-Animation auf aktuellem Thumbnail
-            const curThumb = previewGrid.querySelectorAll('img')[idx];
-            if (curThumb) curThumb.classList.add('omm-prev-uploading');
+            // Spinner auf aktuellem Thumbnail
+            const curWrap = previewGrid.querySelectorAll('.omm-prev-wrap')[idx];
+            if (curWrap) {
+                curWrap.classList.add('omm-prev-uploading');
+                const ov = curWrap.querySelector('.omm-prev-overlay');
+                if (ov) ov.innerHTML = '<div class="omm-spinner"></div>';
+            }
 
             const fd = new FormData();
             fd.append('datei', file);
@@ -843,11 +861,20 @@ $fotos_json = array_map( function( $f ) {
                             requestAnimationFrame(function(){ requestAnimationFrame(function(){ card.style.opacity='1'; card.style.transform='scale(1)'; }); });
                         }
                         // Vorschau-Thumbnail als erledigt markieren
-                        const prevImg = previewGrid.querySelectorAll('img')[idx];
-                        if (prevImg) { prevImg.classList.remove('omm-prev-uploading'); prevImg.classList.add('omm-prev-done'); }
+                        const prevWrap = previewGrid.querySelectorAll('.omm-prev-wrap')[idx];
+                        if (prevWrap) {
+                            prevWrap.classList.remove('omm-prev-uploading');
+                            const ov = prevWrap.querySelector('.omm-prev-overlay');
+                            if (ov) ov.innerHTML = '<span class="omm-prev-done-icon">✅</span>';
+                        }
                     } else {
-                        const prevImg = previewGrid.querySelectorAll('img')[idx];
-                        if (prevImg) { prevImg.classList.remove('omm-prev-uploading'); prevImg.classList.add('omm-prev-fail'); }
+                        const prevWrap = previewGrid.querySelectorAll('.omm-prev-wrap')[idx];
+                        if (prevWrap) {
+                            prevWrap.classList.remove('omm-prev-uploading');
+                            prevWrap.classList.add('omm-prev-fail');
+                            const ov = prevWrap.querySelector('.omm-prev-overlay');
+                            if (ov) ov.innerHTML = '<span class="omm-prev-fail-icon">❌</span>';
+                        }
                     }
                 } catch(e) {}
                 idx++;
