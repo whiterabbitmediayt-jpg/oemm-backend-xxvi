@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.12
+ * Version:     2.3.13
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.12' );
+define( 'OEMM_XXVI_VERSION', '2.3.13' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -68,13 +68,6 @@ add_action( 'upgrader_process_complete', function() {
 define( 'OEMM_XXVI_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'OEMM_XXVI_URL',     plugin_dir_url( __FILE__ ) );
 
-// tFPDF global laden (muss vor Klassendeklaration tFPDF_OMM stehen)
-if ( ! defined('FPDF_FONTPATH') ) {
-    define( 'FPDF_FONTPATH', OEMM_XXVI_PATH . 'lib/' );
-}
-if ( ! class_exists('tFPDF') ) {
-    require_once OEMM_XXVI_PATH . 'lib/tfpdf.php';
-}
 define( 'OEMM_XXVI_TABLE',        'oemm_xxvi_agreements' );
 define( 'OEMM_XXVI_FOTOS_TABLE',  'oemm_xxvi_fotos' );
 define( 'OEMM_XXVI_LIKES_TABLE',  'oemm_xxvi_foto_likes' );
@@ -1039,14 +1032,13 @@ function oemm_xxvi_download_handler() {
 }
 
 function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png ) {
-    // tFPDF_OMM wird global geladen (siehe oben nach OEMM_XXVI_PATH define)
-    $pdf = new tFPDF_OMM('P', 'mm', 'A4');
+    // FPDF laden (stabile Version, Latin-1 = Umlaute korrekt via iconv)
+    if ( ! class_exists('FPDF') ) {
+        require_once OEMM_XXVI_PATH . 'lib/fpdf.php';
+    }
+    $pdf = new FPDF_OMM('P', 'mm', 'A4');
     $pdf->SetAutoPageBreak(true, 18);
     $pdf->SetMargins(20, 20, 20);
-
-    // UTF-8 Fonts registrieren (tFPDF sucht in FPDF_FONTPATH/unifont/)
-    $pdf->AddFont('DejaVu', '',  'DejaVuSans.ttf',      true);
-    $pdf->AddFont('DejaVu', 'B', 'DejaVuSans-Bold.ttf', true);
 
     $pdf->AddPage();
 
@@ -1062,10 +1054,10 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
 
     // Titel neben Logo
     $pdf->SetTextColor(255, 255, 255);
-    $pdf->SetFont('DejaVu', 'B', 15);
+    $pdf->SetFont('Helvetica', 'B', 15);
     $pdf->SetXY(46, 7);
     $pdf->Cell(0, 8, 'OTZTALER MOPED VEREIN', 0, 1, 'L');
-    $pdf->SetFont('DejaVu', '', 8);
+    $pdf->SetFont('Helvetica', '', 8);
     $pdf->SetTextColor(200, 215, 240);
     $pdf->SetX(46);
     $pdf->Cell(0, 5, 'AGB & Haftungsausschluss - Oetztaler Moped Marathon XXVI / 2026', 0, 1, 'L');
@@ -1081,23 +1073,23 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     $pdf->Rect(20, 42, 170, 26, 'FD');
     $pdf->SetXY(25, 45);
     $pdf->SetTextColor(15, 52, 96);
-    $pdf->SetFont('DejaVu', 'B', 8);
+    $pdf->SetFont('Helvetica', 'B', 8);
     $pdf->Cell(32, 5, 'Teilnehmer:', 0, 0);
-    $pdf->SetFont('DejaVu', '', 8);
+    $pdf->SetFont('Helvetica', '', 8);
     $pdf->SetTextColor(40, 40, 40);
     $pdf->Cell(0, 5, $fullname . '  (@' . $username . ''), 0, 1);
     $pdf->SetX(25);
-    $pdf->SetFont('DejaVu', 'B', 8);
+    $pdf->SetFont('Helvetica', 'B', 8);
     $pdf->SetTextColor(15, 52, 96);
     $pdf->Cell(32, 5, 'Veranstalter:', 0, 0);
-    $pdf->SetFont('DejaVu', '', 8);
+    $pdf->SetFont('Helvetica', '', 8);
     $pdf->SetTextColor(40, 40, 40);
     $pdf->Cell(0, 5, 'Oetztaler Moped Verein, Soelden, Tirol', 0, 1);
     $pdf->SetX(25);
-    $pdf->SetFont('DejaVu', 'B', 8);
+    $pdf->SetFont('Helvetica', 'B', 8);
     $pdf->SetTextColor(15, 52, 96);
     $pdf->Cell(32, 5, 'Unterzeichnet am:', 0, 0);
-    $pdf->SetFont('DejaVu', '', 8);
+    $pdf->SetFont('Helvetica', '', 8);
     $pdf->SetTextColor(40, 40, 40);
     $pdf->Cell(0, 5, $signed_ts, 0, 1);
 
@@ -1106,24 +1098,24 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     // Meta-Box
     $pdf->SetFillColor(245, 245, 245);
     $pdf->SetTextColor(40, 40, 40);
-    $pdf->SetFont('DejaVu', '', 9);
+    $pdf->SetFont('Helvetica', '', 9);
     $pdf->SetX(20);
     $pdf->SetFillColor(235, 241, 250);
     $pdf->Rect(20, 34, 170, 24, 'F');
     $pdf->SetXY(24, 37);
-    $pdf->SetFont('DejaVu', 'B', 9);
+    $pdf->SetFont('Helvetica', 'B', 9);
     $pdf->Cell(28, 5, 'Teilnehmer:', 0, 0);
-    $pdf->SetFont('DejaVu', '', 9);
+    $pdf->SetFont('Helvetica', '', 9);
     $pdf->Cell(0, 5, $fullname . ' (@' . $username . ''), 0, 1);
     $pdf->SetX(24);
-    $pdf->SetFont('DejaVu', 'B', 9);
+    $pdf->SetFont('Helvetica', 'B', 9);
     $pdf->Cell(28, 5, 'Veranstalter:', 0, 0);
-    $pdf->SetFont('DejaVu', '', 9);
+    $pdf->SetFont('Helvetica', '', 9);
     $pdf->Cell(0, 5, 'Oetztaler Moped Verein, Soelden, Tirol', 0, 1);
     $pdf->SetX(24);
-    $pdf->SetFont('DejaVu', 'B', 9);
+    $pdf->SetFont('Helvetica', 'B', 9);
     $pdf->Cell(28, 5, 'Unterzeichnet:', 0, 0);
-    $pdf->SetFont('DejaVu', '', 9);
+    $pdf->SetFont('Helvetica', '', 9);
     $pdf->Cell(0, 5, $signed_ts, 0, 1);
     $pdf->SetY(64);
 
@@ -1132,7 +1124,7 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
 
     // HA-Text: exakt gleicher Wortlaut wie HTML-View (Herzversion)
     // Umlaute per iconv am Ende konvertiert - Quellcode bleibt UTF-8 lesbar
-    $fn = $fullname;
+    $fn = iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $fullname);
     $sections = [
         'ALLGEMEINE GESCHAEFTSBEDINGUNGEN DES OeMV' => [
             $fn . ' erklaert seinen Beitritt zum Oetztaler Moped Verein, spaeter "OeMV" genannt, mit Kauf der Mitgliedschaft, als ordentliches Mitglied ohne Stimmrecht fuer die Dauer bis Ende September des jeweiligen Jahres.',
@@ -1158,18 +1150,18 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     ];
 
     foreach ( $sections as $title => $paragraphs ) {
-        $pdf->SetFont('DejaVu', 'B', 9);
+        $pdf->SetFont('Helvetica', 'B', 9);
         $pdf->SetTextColor(15, 52, 96);
         $pdf->SetX(20);
-        $pdf->Cell(0, 6, strtoupper($title), 0, 1);
+        $pdf->Cell(0, 6, strtoupper(iconv('UTF-8','ISO-8859-1//TRANSLIT',$title)), 0, 1);
         $pdf->SetDrawColor(15, 52, 96);
         $pdf->Line(20, $pdf->GetY(), 190, $pdf->GetY());
         $pdf->Ln(2);
-        $pdf->SetFont('DejaVu', '', 9);
+        $pdf->SetFont('Helvetica', '', 9);
         $pdf->SetTextColor(60, 60, 60);
         foreach ( $paragraphs as $p ) {
             $pdf->SetX(20);
-            $pdf->MultiCell(170, 5, $p, 0, 'L');
+            $pdf->MultiCell(170, 5, iconv('UTF-8','ISO-8859-1//TRANSLIT',$p), 0, 'L');
             $pdf->Ln(1);
         }
         $pdf->Ln(3);
@@ -1177,7 +1169,7 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
 
     // ========== UNTERSCHRIFT SEKTION ==========
     $pdf->Ln(4);
-    $pdf->SetFont('DejaVu', 'B', 9);
+    $pdf->SetFont('Helvetica', 'B', 9);
     $pdf->SetTextColor(15, 52, 96);
     $pdf->SetX(20);
     $pdf->Cell(0, 6, 'DIGITALE UNTERSCHRIFT DES TEILNEHMERS', 0, 1);
@@ -1211,12 +1203,12 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     $pdf->SetDrawColor(180, 180, 180);
     $pdf->Line(30, $pdf->GetY(), 180, $pdf->GetY());
     $pdf->Ln(3);
-    $pdf->SetFont('DejaVu', '', 8);
+    $pdf->SetFont('Helvetica', '', 8);
     $pdf->SetTextColor(100, 100, 100);
     $pdf->SetX(30);
     $pdf->Cell(150, 5, $fullname . '  |  ' . $signed_ts, 0, 1, 'C');
     $pdf->SetX(30);
-    $pdf->SetFont('DejaVu', '', 7);
+    $pdf->SetFont('Helvetica', '', 7);
     $pdf->SetTextColor(140, 140, 140);
     $pdf->Cell(150, 5, 'Rechtsverbindliche digitale Unterschrift gemaess EU-Verordnung 910/2014 (eIDAS)', 0, 1, 'C');
 
@@ -1224,7 +1216,7 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     $pdf->SetY(-18);
     $pdf->SetFillColor(15, 52, 96);
     $pdf->Rect(0, $pdf->GetY(), 210, 18, 'F');
-    $pdf->SetFont('DejaVu', '', 7);
+    $pdf->SetFont('Helvetica', '', 7);
     $pdf->SetTextColor(180, 200, 230);
     $pdf->SetX(20);
     $pdf->Cell(0, 9, 'Oetztaler Moped Verein - OeMM XXVI 2026  |  mopedmarathon.at  |  Elektronisch unterzeichnet: ' . $signed_ts, 0, 0, 'C');
@@ -1232,9 +1224,12 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     $pdf->Output('F', $filepath);
 }
 
-// tFPDF_OMM: tFPDF Subklasse mit RoundedRect (UTF-8 fähig, kein FPDF nötig)
-if ( ! class_exists('tFPDF_OMM') ) {
-    class tFPDF_OMM extends tFPDF {
+// FPDF_OMM: FPDF Subklasse mit RoundedRect
+if ( ! class_exists('FPDF') ) {
+    require_once OEMM_XXVI_PATH . 'lib/fpdf.php';
+}
+if ( ! class_exists('FPDF_OMM') ) {
+    class FPDF_OMM extends FPDF {
         public function RoundedRect($x, $y, $w, $h, $r, $style='') {
             $k=$this->k; $hp=$this->h;
             if($style=='F') $op='f';
@@ -1243,19 +1238,19 @@ if ( ! class_exists('tFPDF_OMM') ) {
             $this->_out(sprintf('%.2F %.2F m',($x+$r)*$k,($hp-$y)*$k));
             $xc=$x+$w-$r; $yc=$y+$r;
             $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-$y)*$k));
-            $this->_Arc2($xc,$yc,$r,90,0);
+            $this->_Arc3($xc,$yc,$r,90,0);
             $xc=$x+$w-$r; $yc=$y+$h-$r;
             $this->_out(sprintf('%.2F %.2F l',($x+$w)*$k,($hp-$yc)*$k));
-            $this->_Arc2($xc,$yc,$r,0,-90);
+            $this->_Arc3($xc,$yc,$r,0,-90);
             $xc=$x+$r; $yc=$y+$h-$r;
             $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-($y+$h))*$k));
-            $this->_Arc2($xc,$yc,$r,-90,-180);
+            $this->_Arc3($xc,$yc,$r,-90,-180);
             $xc=$x+$r; $yc=$y+$r;
             $this->_out(sprintf('%.2F %.2F l',($x)*$k,($hp-$yc)*$k));
-            $this->_Arc2($xc,$yc,$r,180,90);
+            $this->_Arc3($xc,$yc,$r,180,90);
             $this->_out($op);
         }
-        private function _Arc2($x1,$y1,$r,$a1,$a2) {
+        private function _Arc3($x1,$y1,$r,$a1,$a2) {
             $a1=deg2rad($a1); $a2=deg2rad($a2);
             $b=$r*4/3*(1-cos(($a1-$a2)/2))/sin(($a1-$a2)/2);
             $x2=$x1+$r*cos($a1); $y2=$y1-$r*sin($a1);
