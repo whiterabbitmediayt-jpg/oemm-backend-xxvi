@@ -150,7 +150,7 @@ $fotos_json = array_map( function( $f ) {
             <div class="drop-icon">🖼️</div>
             <div>Datei hierher ziehen oder tippen</div>
             <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP · MP4 · MOV · WEBM</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:2px">Max. 100 MB — entspricht ca. 4–10 Minuten Video (je nach Qualität)</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:2px">Max. 500 MB — ca. 1–2 Minuten iPhone-Video in HD/4K</div>
             <img class="drop-preview" id="ommDropPreview" src="" alt="" />
             <video class="drop-preview-video" id="ommDropPreviewVideo" muted playsinline></video>
         </div>
@@ -708,7 +708,7 @@ $fotos_json = array_map( function( $f ) {
 
     function handleFileSelect(file) {
         if (!file) return;
-        const maxMB = 100;
+        const maxMB = 500;
         if (file.size > maxMB * 1024 * 1024) {
             uploadMsg.textContent = 'Datei zu groß (max ' + maxMB + ' MB)';
             uploadMsg.style.color = '#f87171';

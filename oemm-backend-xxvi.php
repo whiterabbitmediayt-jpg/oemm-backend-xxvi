@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.21
+ * Version:     2.3.22
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.21' );
+define( 'OEMM_XXVI_VERSION', '2.3.22' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -1054,7 +1054,7 @@ function oemm_xxvi_rest_foto_user_upload( WP_REST_Request $req ): WP_REST_Respon
     $file     = $files['datei'];
     $tmp_path = $file['tmp_name'];
     $filesize = (int) $file['size'];
-    $max_bytes = 100 * 1024 * 1024; // 100 MB
+    $max_bytes = 500 * 1024 * 1024; // 500 MB
 
     if ( $filesize > $max_bytes ) {
         return new WP_Error( 'file_too_large', 'Datei zu gross (max 100 MB).', [ 'status' => 413 ] );
