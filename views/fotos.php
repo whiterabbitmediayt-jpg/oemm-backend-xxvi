@@ -68,8 +68,8 @@ $fotos_json = array_map( function( $f ) {
 .omm-foto-card video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .omm-video-badge{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;font-family:'Oswald',sans-serif;letter-spacing:.3px}
 /* Upload Button */
-.omm-upload-trigger{display:inline-flex;align-items:center;gap:8px;background:rgba(240,192,64,.15);color:#f0c040;border:1px solid rgba(240,192,64,.3);font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;padding:10px 20px;border-radius:10px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;margin-bottom:18px;transition:background .15s}
-.omm-upload-trigger:hover{background:rgba(240,192,64,.3)}
+.omm-upload-trigger{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:rgba(240,192,64,.12);color:#f0c040;border:1px solid rgba(240,192,64,.25);font-family:'Oswald',sans-serif;font-size:15px;font-weight:700;padding:13px 20px;border-radius:12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;margin-bottom:20px;transition:background .15s,border-color .15s;box-sizing:border-box}
+.omm-upload-trigger:hover{background:rgba(240,192,64,.22);border-color:rgba(240,192,64,.45)}
 /* Upload Modal */
 #ommUploadModal{display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.85);align-items:center;justify-content:center}
 #ommUploadModal.open{display:flex}
@@ -135,11 +135,9 @@ $fotos_json = array_map( function( $f ) {
 #ommLbClose:hover{background:rgba(255,255,255,.25)}
 </style>
 
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px">
-    <h2 style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:#fff;margin:0">📷 Meine Fotos</h2>
-    <button class="omm-upload-trigger" id="ommUploadOpen">🖼️ Bilder / Videos uploaden</button>
-</div>
-<p style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:18px">Deine Fotobox-Bilder vom ÖMM <?php echo esc_html( $event_year ); ?> — Foto antippen zum Durchswipen</p>
+<h2 style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:6px">📷 Meine Fotos</h2>
+<p style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:16px">Deine Fotobox-Bilder vom ÖMM <?php echo esc_html( $event_year ); ?> — Foto antippen zum Durchswipen</p>
+<button class="omm-upload-trigger" id="ommUploadOpen">🖼️ Bilder / Videos uploaden</button>
 
 <!-- UPLOAD MODAL -->
 <div id="ommUploadModal" role="dialog" aria-modal="true">
@@ -168,12 +166,7 @@ $fotos_json = array_map( function( $f ) {
     </div>
 </div>
 
-<?php if ( ! $zip_available ) : ?>
-<div class="omm-zip-hint">
-    <span style="font-size:20px">📦</span>
-    <span>ZIP-Download steht <?php echo $zip_date_human ? 'ab <strong>' . esc_html( $zip_date_human ) . '</strong>' : 'nach dem Event'; ?> im <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" style="color:#f0c040;text-decoration:underline">Downloads-Bereich</a> bereit.</span>
-</div>
-<?php endif; ?>
+
 
 <?php if ( empty( $fotos ) ) : ?>
 <div class="omm-empty">
@@ -240,8 +233,16 @@ $fotos_json = array_map( function( $f ) {
 
 <?php endif; ?>
 
+<!-- ZIP-Hinweis -->
+<?php if ( ! $zip_available ) : ?>
+<div class="omm-zip-hint" style="margin-top:28px;margin-bottom:0">
+    <span style="font-size:20px">📦</span>
+    <span>ZIP-Download steht <?php echo $zip_date_human ? 'ab <strong>' . esc_html( $zip_date_human ) . '</strong>' : 'nach dem Event'; ?> im <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" style="color:#f0c040;text-decoration:underline">Downloads-Bereich</a> bereit.</span>
+</div>
+<?php endif; ?>
+
 <!-- Link zum öffentlichen Album -->
-<div style="margin-top:28px;padding:16px 20px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;display:flex;align-items:center;gap:14px">
+<div style="margin-top:16px;padding:16px 20px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;display:flex;align-items:center;gap:14px">
     <span style="font-size:24px">🖼️</span>
     <div style="flex:1">
         <div style="font-size:14px;font-weight:600;color:rgba(255,255,255,.8)">Öffentliches Album</div>
