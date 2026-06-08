@@ -497,8 +497,7 @@ foreach ( $bottom_nav_mehr as $ep => $_ ) {
     <div class="oemm-mh-badge">Teilnehmer 2026</div>
   </div>
   <div class="oemm-mh-countdown">
-    <span class="cd-val" id="cd-mh-days">--</span><span class="cd-sep">T</span>
-    <span class="cd-val" id="cd-mh-hours" style="color:rgba(255,255,255,.6)">--</span><span class="cd-sep">H</span>
+    <span style="font-family:'Oswald',sans-serif;font-size:13px;color:rgba(255,255,255,.4);font-weight:400">-</span><span class="cd-val" id="cd-mh-days">--</span><span class="cd-sep">T </span><span class="cd-val" id="cd-mh-hours" style="color:rgba(255,255,255,.6)">--</span><span class="cd-sep">H</span>
   </div>
 </div>
 

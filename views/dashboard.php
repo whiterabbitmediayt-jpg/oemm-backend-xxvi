@@ -224,7 +224,6 @@ function oemm_status_badge( $status ) {
     .countdown-grid { gap: 6px !important; }
     .two-col-grid { display: none !important; }
     .oemm-last-orders { display: none !important; }
-    .oemm-mobile-countdown { display: block !important; }
     /* Ticket Mobile */
     .oemm-ticket-inner { flex-direction: column !important; }
     .oemm-ticket-left {
@@ -257,48 +256,47 @@ function oemm_status_badge( $status ) {
 <div id="oemm-ha-dismissed" style="display:none;padding:10px 18px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;margin-bottom:18px;font-size:12px;color:rgba(255,255,255,0.3);text-align:center;">
   ✅ Haftungsausschluss unterzeichnet — <a href="<?php echo esc_url( wc_get_account_endpoint_url('omm-downloads') ); ?>" style="color:rgba(255,255,255,0.45);text-decoration:none;">Im Downloadbereich verfügbar ↗</a>
 </div>
-<style>
-@keyframes oemm-flyout {
-  0%   { opacity: 1; transform: translateY(0) scale(1); max-height: 80px; }
-  40%  { opacity: 1; transform: translateY(-8px) scale(1.02); }
-  70%  { opacity: 0.4; transform: translateY(40px) scale(0.92); max-height: 80px; }
-  100% { opacity: 0; transform: translateY(60px) scale(0.88); max-height: 0; padding: 0; margin: 0; }
-}
-.oemm-ha-flyout {
-  animation: oemm-flyout 0.7s cubic-bezier(.4,0,.2,1) forwards;
-  overflow: hidden;
-}
-</style>
 <script>
 (function(){
   var uid = '<?php echo esc_js((string)$user->ID); ?>';
   var key = 'oemm_ha_dismissed_' + uid;
   if (localStorage.getItem(key)) {
-    document.getElementById('oemm-ha-banner').style.display = 'none';
-    document.getElementById('oemm-ha-dismissed').style.display = 'block';
+    var b = document.getElementById('oemm-ha-banner');
+    var d = document.getElementById('oemm-ha-dismissed');
+    if(b) b.style.display = 'none';
+    if(d) d.style.display = 'block';
   }
 })();
 function ommDismissHA(e) {
   e.preventDefault();
   var uid = '<?php echo esc_js((string)$user->ID); ?>';
   var key = 'oemm_ha_dismissed_' + uid;
-  var banner = document.getElementById('oemm-ha-banner');
   var target = '<?php echo esc_js( wc_get_account_endpoint_url('haftungsausschluss') ); ?>';
-  // Animation starten
-  banner.classList.add('oemm-ha-flyout');
-  // Nach Animation: localStorage setzen + dismissed zeigen
+  var banner = document.getElementById('oemm-ha-banner');
+  var dismissed = document.getElementById('oemm-ha-dismissed');
+  // Schritt 1: Banner weganimieren
+  banner.style.transition = 'all 0.5s cubic-bezier(.4,0,.2,1)';
+  banner.style.transform = 'translateX(80px)';
+  banner.style.opacity = '0';
+  banner.style.maxHeight = banner.offsetHeight + 'px';
+  setTimeout(function() {
+    banner.style.maxHeight = '0';
+    banner.style.marginBottom = '0';
+    banner.style.padding = '0';
+    banner.style.overflow = 'hidden';
+  }, 300);
+  // Schritt 2: Nach 600ms localStorage + dismissed einblenden + navigieren
   setTimeout(function() {
     localStorage.setItem(key, '1');
     banner.style.display = 'none';
-    banner.classList.remove('oemm-ha-flyout');
-    var dismissed = document.getElementById('oemm-ha-dismissed');
-    dismissed.style.display = 'block';
-    dismissed.style.opacity = '0';
-    dismissed.style.transition = 'opacity 0.4s';
-    setTimeout(function(){ dismissed.style.opacity = '1'; }, 50);
-    // Zur Seite navigieren
-    window.location.href = target;
-  }, 700);
+    if(dismissed) {
+      dismissed.style.display = 'block';
+      dismissed.style.opacity = '0';
+      dismissed.style.transition = 'opacity 0.4s';
+      setTimeout(function(){ dismissed.style.opacity = '1'; }, 30);
+    }
+    setTimeout(function(){ window.location.href = target; }, 300);
+  }, 600);
 }
 </script>
 <?php endif; ?>
@@ -357,34 +355,6 @@ function ommDismissHA(e) {
     <div class="quick-card-value">Kontodetails</div>
     <div class="quick-card-sub">Passwort ändern →</div>
   </a>
-</div>
-
-<!-- MOBILE COUNTDOWN (nur auf Mobile sichtbar, Desktop hat two-col-grid) -->
-<div class="oemm-mobile-countdown" style="display:none;margin-bottom:18px;">
-  <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:16px;padding:18px 16px;text-align:center;">
-    <div style="font-size:10px;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.3);margin-bottom:12px;">ÖMM 2026 — 26. Juni · Countdown</div>
-    <div style="display:flex;justify-content:center;align-items:baseline;gap:6px;">
-      <div style="text-align:center;min-width:44px;">
-        <span style="font-family:'Oswald',sans-serif;font-size:15px;font-weight:400;color:rgba(255,255,255,0.35);margin-right:1px">-</span><span id="mcd-days" style="font-family:'Oswald',sans-serif;font-size:38px;font-weight:700;color:#f0c040;line-height:1">--</span>
-        <span style="font-size:9px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px;display:block;margin-top:3px">Tage</span>
-      </div>
-      <span style="font-family:'Oswald',sans-serif;font-size:28px;color:rgba(255,255,255,0.2);margin-bottom:14px">:</span>
-      <div style="text-align:center;min-width:44px;">
-        <span id="mcd-hours" style="font-family:'Oswald',sans-serif;font-size:38px;font-weight:700;color:rgba(255,255,255,0.7);display:block;line-height:1">--</span>
-        <span style="font-size:9px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px;display:block;margin-top:3px">Std</span>
-      </div>
-      <span style="font-family:'Oswald',sans-serif;font-size:28px;color:rgba(255,255,255,0.2);margin-bottom:14px">:</span>
-      <div style="text-align:center;min-width:44px;">
-        <span id="mcd-mins" style="font-family:'Oswald',sans-serif;font-size:38px;font-weight:700;color:rgba(255,255,255,0.5);display:block;line-height:1">--</span>
-        <span style="font-size:9px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px;display:block;margin-top:3px">Min</span>
-      </div>
-      <span style="font-family:'Oswald',sans-serif;font-size:28px;color:rgba(255,255,255,0.2);margin-bottom:14px">:</span>
-      <div style="text-align:center;min-width:44px;">
-        <span id="mcd-secs" style="font-family:'Oswald',sans-serif;font-size:38px;font-weight:700;color:rgba(255,255,255,0.3);display:block;line-height:1">--</span>
-        <span style="font-size:9px;text-transform:uppercase;color:rgba(255,255,255,0.3);letter-spacing:0.8px;display:block;margin-top:3px">Sek</span>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- COUNTDOWN + SCHNELLZUGRIFF -->
@@ -476,11 +446,7 @@ function ommDismissHA(e) {
     if(document.getElementById('cd-hours')) document.getElementById('cd-hours').textContent = h;
     if(document.getElementById('cd-mins'))  document.getElementById('cd-mins').textContent  = m;
     if(document.getElementById('cd-secs'))  document.getElementById('cd-secs').textContent  = s;
-    // Mobile Countdown
-    if(document.getElementById('mcd-days'))  document.getElementById('mcd-days').textContent  = d;
-    if(document.getElementById('mcd-hours')) document.getElementById('mcd-hours').textContent = h;
-    if(document.getElementById('mcd-mins'))  document.getElementById('mcd-mins').textContent  = m;
-    if(document.getElementById('mcd-secs'))  document.getElementById('mcd-secs').textContent  = s;
+
   }
   updateCountdown(); setInterval(updateCountdown, 1000);
 })();
