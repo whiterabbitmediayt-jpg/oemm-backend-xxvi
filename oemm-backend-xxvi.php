@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.23
+ * Version:     2.3.24
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.23' );
+define( 'OEMM_XXVI_VERSION', '2.3.24' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -1054,10 +1054,10 @@ function oemm_xxvi_rest_foto_user_upload( WP_REST_Request $req ): WP_REST_Respon
     $file     = $files['datei'];
     $tmp_path = $file['tmp_name'];
     $filesize = (int) $file['size'];
-    $max_bytes = 500 * 1024 * 1024; // 500 MB
+    $max_bytes = 25 * 1024 * 1024; // 25 MB
 
     if ( $filesize > $max_bytes ) {
-        return new WP_Error( 'file_too_large', 'Datei zu gross (max 100 MB).', [ 'status' => 413 ] );
+        return new WP_Error( 'file_too_large', 'Datei zu gross (max 25 MB).', [ 'status' => 413 ] );
     }
 
     $mime = mime_content_type( $tmp_path ) ?: '';
@@ -1066,16 +1066,12 @@ function oemm_xxvi_rest_foto_user_upload( WP_REST_Request $req ): WP_REST_Respon
         'image/jpg'  => 'jpg',
         'image/png'  => 'png',
         'image/webp' => 'webp',
-        'video/mp4'  => 'mp4',
-        'video/quicktime' => 'mov',
-        'video/webm' => 'webm',
-        'video/x-msvideo' => 'avi',
     ];
     if ( ! isset( $allowed[ $mime ] ) ) {
-        return new WP_Error( 'invalid_mime', 'Dateityp nicht erlaubt (JPEG/PNG/WEBP/MP4/MOV/WEBM).', [ 'status' => 415 ] );
+        return new WP_Error( 'invalid_mime', 'Dateityp nicht erlaubt (JPEG/PNG/WEBP).', [ 'status' => 415 ] );
     }
     $ext      = $allowed[ $mime ];
-    $is_video = str_starts_with( $mime, 'video/' );
+    $is_video = false;
 
     $is_public = (int) ( $req->get_param( 'is_public' ) ?? 0 ) === 1 ? 1 : 0;
 
@@ -1091,17 +1087,7 @@ function oemm_xxvi_rest_foto_user_upload( WP_REST_Request $req ): WP_REST_Respon
         return new WP_Error( 'move_failed', 'Datei konnte nicht gespeichert werden.', [ 'status' => 500 ] );
     }
 
-    // .htaccess: Videos auch sperren (nur ueber PHP ausliefern)
-    if ( $is_video ) {
-        $htaccess = dirname( $dest ) . '/.htaccess';
-        if ( file_exists( $htaccess ) ) {
-            $rules = file_get_contents( $htaccess );
-            if ( strpos( $rules, 'mp4' ) === false ) {
-                $rules .= "\n<FilesMatch \".\\+\\.(mp4|mov|webm|avi)$\">\n    Require all denied\n</FilesMatch>\n";
-                file_put_contents( $htaccess, $rules );
-            }
-        }
-    }
+
 
     $fotos_table = $wpdb->prefix . OEMM_XXVI_FOTOS_TABLE;
     $wpdb->insert( $fotos_table, [
@@ -1125,7 +1111,6 @@ function oemm_xxvi_rest_foto_user_upload( WP_REST_Request $req ): WP_REST_Respon
         'foto_id'   => $foto_id,
         'url'       => $serve_url,
         'is_public' => $is_public,
-        'is_video'  => $is_video,
         'filesize'  => $filesize,
     ], 200 );
 }

@@ -64,9 +64,7 @@ $fotos_json = array_map( function( $f ) {
 .omm-btn-delete:hover{background:rgba(239,68,68,.55);color:#fff}
 .omm-btn-download{background:rgba(240,192,64,.15);color:#f0c040;border:1px solid rgba(240,192,64,.25)}
 .omm-btn-download:hover{background:rgba(240,192,64,.35);color:#fff}
-/* Video in Grid */
-.omm-foto-card video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-.omm-video-badge{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;font-family:'Oswald',sans-serif;letter-spacing:.3px}
+
 /* Upload Button */
 .omm-upload-trigger{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:rgba(240,192,64,.12);color:#f0c040;border:1px solid rgba(240,192,64,.25);font-family:'Oswald',sans-serif;font-size:15px;font-weight:700;padding:13px 20px;border-radius:12px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;margin-bottom:20px;transition:background .15s,border-color .15s;box-sizing:border-box}
 .omm-upload-trigger:hover{background:rgba(240,192,64,.22);border-color:rgba(240,192,64,.45)}
@@ -80,7 +78,7 @@ $fotos_json = array_map( function( $f ) {
 .omm-drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .omm-drop-zone .drop-icon{font-size:32px;margin-bottom:8px}
 .omm-drop-zone .drop-preview{max-width:100%;max-height:140px;border-radius:8px;margin-top:10px;display:none}
-.omm-drop-zone .drop-preview-video{max-width:100%;max-height:140px;border-radius:8px;margin-top:10px;display:none}
+
 .omm-public-toggle{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;user-select:none}
 .omm-public-toggle input{width:18px;height:18px;cursor:pointer;accent-color:#f0c040}
 .omm-upload-progress{display:none;height:6px;background:rgba(255,255,255,.1);border-radius:3px;margin-bottom:14px;overflow:hidden}
@@ -137,20 +135,18 @@ $fotos_json = array_map( function( $f ) {
 
 <h2 style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:6px">📷 Meine Fotos</h2>
 <p style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:16px">Deine Fotobox-Bilder vom ÖMM <?php echo esc_html( $event_year ); ?> — Foto antippen zum Durchswipen</p>
-<button class="omm-upload-trigger" id="ommUploadOpen">🖼️ Bilder / Videos uploaden</button>
+<button class="omm-upload-trigger" id="ommUploadOpen">📷 Eigene Bilder uploaden</button>
 
 <!-- UPLOAD MODAL -->
 <div id="ommUploadModal" role="dialog" aria-modal="true">
     <div id="ommUploadBox">
         <h3>📤 Foto / Video hochladen</h3>
         <div class="omm-drop-zone" id="ommDropZone">
-            <input type="file" id="ommUploadFile" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" />
-            <div class="drop-icon">🖼️</div>
-            <div>Datei hierher ziehen oder tippen</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP · MP4 · MOV · WEBM</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:2px">Max. 500 MB — ca. 1–2 Minuten iPhone-Video in HD/4K</div>
+            <input type="file" id="ommUploadFile" accept="image/jpeg,image/png,image/webp" />
+            <div class="drop-icon">📷</div>
+            <div>Foto hierher ziehen oder tippen</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP — max. 25 MB</div>
             <img class="drop-preview" id="ommDropPreview" src="" alt="" />
-            <video class="drop-preview-video" id="ommDropPreviewVideo" muted playsinline></video>
         </div>
         <label class="omm-public-toggle">
             <input type="checkbox" id="ommUploadPublic" /> Sofort öffentlich sichtbar (Community-Album)
@@ -683,7 +679,6 @@ $fotos_json = array_map( function( $f ) {
     const uploadPublic  = document.getElementById('ommUploadPublic');
     const dropZone      = document.getElementById('ommDropZone');
     const dropPreview   = document.getElementById('ommDropPreview');
-    const dropPreviewV  = document.getElementById('ommDropPreviewVideo');
     const uploadMsg     = document.getElementById('ommUploadMsg');
     const uploadProg    = document.getElementById('ommUploadProgress');
     const uploadBar     = document.getElementById('ommUploadBar');
@@ -695,9 +690,7 @@ $fotos_json = array_map( function( $f ) {
         uploadModal.classList.remove('open');
         uploadFile.value = '';
         dropPreview.style.display = 'none';
-        dropPreviewV.style.display = 'none';
         dropPreview.src = '';
-        dropPreviewV.src = '';
         uploadSend.disabled = true;
         uploadMsg.textContent = '';
         uploadProg.style.display = 'none';
@@ -709,7 +702,7 @@ $fotos_json = array_map( function( $f ) {
 
     function handleFileSelect(file) {
         if (!file) return;
-        const maxMB = 500;
+        const maxMB = 25;
         if (file.size > maxMB * 1024 * 1024) {
             uploadMsg.textContent = 'Datei zu groß (max ' + maxMB + ' MB)';
             uploadMsg.style.color = '#f87171';
@@ -719,18 +712,9 @@ $fotos_json = array_map( function( $f ) {
         uploadMsg.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
         uploadMsg.style.color = 'rgba(255,255,255,.5)';
         uploadSend.disabled = false;
-        // Preview
-        const isVideo = file.type.startsWith('video/');
-        if (isVideo) {
-            dropPreview.style.display = 'none';
-            dropPreviewV.src = URL.createObjectURL(file);
-            dropPreviewV.style.display = 'block';
-        } else {
-            dropPreviewV.style.display = 'none';
-            const reader = new FileReader();
-            reader.onload = function(e){ dropPreview.src = e.target.result; dropPreview.style.display = 'block'; };
-            reader.readAsDataURL(file);
-        }
+        const reader = new FileReader();
+        reader.onload = function(e){ dropPreview.src = e.target.result; dropPreview.style.display = 'block'; };
+        reader.readAsDataURL(file);
     }
 
     uploadFile.addEventListener('change', function(){ handleFileSelect(this.files[0]); });
@@ -790,7 +774,7 @@ $fotos_json = array_map( function( $f ) {
                         like_count: 0,
                         user_liked: 0,
                         shot_at: '',
-                        is_video: d.is_video ? 1 : 0,
+                        is_video: 0,
                     };
                     FOTOS.unshift(newF);
 
@@ -802,17 +786,10 @@ $fotos_json = array_map( function( $f ) {
                         card.dataset.fotoId = d.foto_id;
                         card.dataset.idx = '0';
                         card.dataset.public = d.is_public;
-                        card.dataset.isVideo = d.is_video ? '1' : '0';
                         card.style.opacity = '0';
                         card.style.transform = 'scale(.9)';
                         card.style.transition = 'opacity .3s,transform .3s';
-
-                        if (d.is_video) {
-                            card.innerHTML = '<video src="'+d.url+'" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>'
-                                + '<div class="omm-video-badge">▶ VIDEO</div>';
-                        } else {
-                            card.innerHTML = '<img src="'+d.url+'" alt="ÖMM Foto" />';
-                        }
+                        card.innerHTML = '<img src="'+d.url+'" alt="ÖMM Foto" />';
                         if (d.is_public) {
                             const badge = document.createElement('div');
                             badge.className = 'omm-foto-badge-pub';
