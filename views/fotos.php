@@ -146,7 +146,8 @@ $fotos_json = array_map( function( $f ) {
             <input type="file" id="ommUploadFile" accept="image/jpeg,image/png,image/webp" multiple />
             <div class="drop-icon">📷</div>
             <div>Fotos hierher ziehen oder tippen</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP — max. 25 MB pro Foto — bis zu 10 Fotos</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP — max. 25 MB pro Foto</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px;font-weight:600">Maximal 10 Fotos pro Upload</div>
             <div id="ommPreviewGrid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px;margin-top:12px"></div>
         </div>
         <label class="omm-public-toggle">
