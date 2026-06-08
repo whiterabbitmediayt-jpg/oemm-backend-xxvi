@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.1
+ * Version:     2.3.2
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.1' );
+define( 'OEMM_XXVI_VERSION', '2.3.2' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -1330,6 +1330,14 @@ function oemm_xxvi_admin_menu() {
 function oemm_xxvi_admin_page() {
     if ( ! current_user_can( 'manage_options' ) ) return;
 
+    // Update-Cache leeren und zu WP Updates weiterleiten
+    if ( isset( $_GET['oemm_check_update'] ) && check_admin_referer( 'oemm_check_update' ) ) {
+        delete_transient( 'oemm_xxvi_github_release' );
+        delete_site_transient( 'update_plugins' );
+        wp_redirect( admin_url( 'update-core.php' ) );
+        exit;
+    }
+
     // Settings speichern
     if ( isset( $_POST['oemm_settings_nonce'] ) && wp_verify_nonce( $_POST['oemm_settings_nonce'], 'oemm_save_settings' ) ) {
         // API Key neu generieren?
@@ -1408,8 +1416,13 @@ function oemm_xxvi_admin_page() {
     $page_url = admin_url( 'admin.php?page=oemm-xxvi-admin' );
     ?>
     <div class="wrap">
-    <h1 style="display:flex;align-items:center;gap:10px">
+    <h1 style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <span style="font-size:28px">🏍️</span> ÖMM XXVI — Admin
+        <a href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'oemm_check_update', '1', $page_url ), 'oemm_check_update' ) ); ?>"
+           class="button button-secondary" style="font-size:13px;margin-top:2px">
+            🔄 Nach Update suchen
+        </a>
+        <span style="font-size:13px;color:#666;font-weight:400">Installierte Version: <?php echo OEMM_XXVI_VERSION; ?></span>
     </h1>
 
     <!-- TABS -->
