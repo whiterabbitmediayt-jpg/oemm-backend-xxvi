@@ -497,7 +497,7 @@ foreach ( $bottom_nav_mehr as $ep => $_ ) {
     <div class="oemm-mh-badge">Teilnehmer 2026</div>
   </div>
   <div class="oemm-mh-countdown">
-    <span style="font-family:'Oswald',sans-serif;font-size:13px;color:rgba(255,255,255,.4);font-weight:400">-</span><span class="cd-val" id="cd-mh-days">--</span><span class="cd-sep">T </span><span class="cd-val" id="cd-mh-hours" style="color:rgba(255,255,255,.6)">--</span><span class="cd-sep">H</span>
+    <span style="font-family:'Oswald',sans-serif;font-size:13px;color:rgba(255,255,255,.4);font-weight:400">-</span><span class="cd-val" id="cd-mh-days">--</span><span class="cd-sep">T </span><span class="cd-val" id="cd-mh-hours" style="color:rgba(255,255,255,.6)">--</span><span class="cd-sep">H </span><span class="cd-val" id="cd-mh-mins" style="color:rgba(255,255,255,.45)">--</span><span class="cd-sep">M </span><span class="cd-val" id="cd-mh-secs" style="color:rgba(255,255,255,.3)">--</span><span class="cd-sep">S</span>
   </div>
 </div>
 
@@ -701,6 +701,7 @@ function ommCloseMehr(e) {
     var d = Math.floor(diff/86400000);
     var h = String(Math.floor((diff%86400000)/3600000)).padStart(2,'0');
     var m = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    var s = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
     // Desktop
     if(document.getElementById('cd-days2'))  document.getElementById('cd-days2').textContent  = d;
     if(document.getElementById('cd-hours2')) document.getElementById('cd-hours2').textContent = h;
@@ -708,8 +709,10 @@ function ommCloseMehr(e) {
     // Mobile Header
     if(document.getElementById('cd-mh-days'))  document.getElementById('cd-mh-days').textContent  = d;
     if(document.getElementById('cd-mh-hours')) document.getElementById('cd-mh-hours').textContent = h;
+    if(document.getElementById('cd-mh-mins'))  document.getElementById('cd-mh-mins').textContent  = m;
+    if(document.getElementById('cd-mh-secs'))  document.getElementById('cd-mh-secs').textContent  = s;
   }
-  update(); setInterval(update, 30000);
+  update(); setInterval(update, 1000);
 })();
 
 // Avatar Upload
