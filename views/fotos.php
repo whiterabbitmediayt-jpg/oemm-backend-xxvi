@@ -137,7 +137,7 @@ $fotos_json = array_map( function( $f ) {
 
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px">
     <h2 style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:#fff;margin:0">📷 Meine Fotos</h2>
-    <button class="omm-upload-trigger" id="ommUploadOpen">📤 Eigenes hochladen</button>
+    <button class="omm-upload-trigger" id="ommUploadOpen">🖼️ Bilder / Videos uploaden</button>
 </div>
 <p style="font-size:13px;color:rgba(255,255,255,.45);margin-bottom:18px">Deine Fotobox-Bilder vom ÖMM <?php echo esc_html( $event_year ); ?> — Foto antippen zum Durchswipen</p>
 
@@ -149,7 +149,8 @@ $fotos_json = array_map( function( $f ) {
             <input type="file" id="ommUploadFile" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" />
             <div class="drop-icon">🖼️</div>
             <div>Datei hierher ziehen oder tippen</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP · MP4 · MOV · WEBM — max. 100 MB</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP · MP4 · MOV · WEBM</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:2px">Max. 100 MB — entspricht ca. 4–10 Minuten Video (je nach Qualität)</div>
             <img class="drop-preview" id="ommDropPreview" src="" alt="" />
             <video class="drop-preview-video" id="ommDropPreviewVideo" muted playsinline></video>
         </div>
