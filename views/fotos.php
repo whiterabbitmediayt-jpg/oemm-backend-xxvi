@@ -77,7 +77,8 @@ $fotos_json = array_map( function( $f ) {
 .omm-drop-zone.drag-over{border-color:#f0c040;background:rgba(240,192,64,.05);color:rgba(255,255,255,.7)}
 .omm-drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .omm-drop-zone .drop-icon{font-size:32px;margin-bottom:8px}
-.omm-drop-zone .drop-preview{max-width:100%;max-height:140px;border-radius:8px;margin-top:10px;display:none}
+#ommPreviewGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.1)}
+#ommPreviewGrid .omm-prev-err{width:100%;aspect-ratio:1;background:rgba(239,68,68,.15);border-radius:6px;border:1px solid rgba(239,68,68,.3);display:flex;align-items:center;justify-content:center;font-size:10px;color:#f87171;text-align:center;padding:4px}
 
 .omm-public-toggle{display:flex;align-items:center;gap:10px;margin-bottom:18px;font-size:13px;color:rgba(255,255,255,.65);cursor:pointer;user-select:none}
 .omm-public-toggle input{width:18px;height:18px;cursor:pointer;accent-color:#f0c040}
@@ -142,11 +143,11 @@ $fotos_json = array_map( function( $f ) {
     <div id="ommUploadBox">
         <h3>📤 Foto / Video hochladen</h3>
         <div class="omm-drop-zone" id="ommDropZone">
-            <input type="file" id="ommUploadFile" accept="image/jpeg,image/png,image/webp" />
+            <input type="file" id="ommUploadFile" accept="image/jpeg,image/png,image/webp" multiple />
             <div class="drop-icon">📷</div>
-            <div>Foto hierher ziehen oder tippen</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP — max. 25 MB</div>
-            <img class="drop-preview" id="ommDropPreview" src="" alt="" />
+            <div>Fotos hierher ziehen oder tippen</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">JPEG · PNG · WEBP — max. 25 MB pro Foto — bis zu 10 Fotos</div>
+            <div id="ommPreviewGrid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px;margin-top:12px"></div>
         </div>
         <label class="omm-public-toggle">
             <input type="checkbox" id="ommUploadPublic" /> Sofort öffentlich sichtbar (Community-Album)
@@ -678,7 +679,7 @@ $fotos_json = array_map( function( $f ) {
     const uploadFile    = document.getElementById('ommUploadFile');
     const uploadPublic  = document.getElementById('ommUploadPublic');
     const dropZone      = document.getElementById('ommDropZone');
-    const dropPreview   = document.getElementById('ommDropPreview');
+    const previewGrid  = document.getElementById('ommPreviewGrid');
     const uploadMsg     = document.getElementById('ommUploadMsg');
     const uploadProg    = document.getElementById('ommUploadProgress');
     const uploadBar     = document.getElementById('ommUploadBar');
@@ -689,8 +690,9 @@ $fotos_json = array_map( function( $f ) {
     function closeUploadModal() {
         uploadModal.classList.remove('open');
         uploadFile.value = '';
-        dropPreview.style.display = 'none';
-        dropPreview.src = '';
+        previewGrid.style.display = 'none';
+        previewGrid.innerHTML = '';
+        _selectedFiles = [];
         uploadSend.disabled = true;
         uploadMsg.textContent = '';
         uploadProg.style.display = 'none';
@@ -700,24 +702,53 @@ $fotos_json = array_map( function( $f ) {
     uploadCancel.addEventListener('click', closeUploadModal);
     uploadModal.addEventListener('click', function(e){ if(e.target === uploadModal) closeUploadModal(); });
 
-    function handleFileSelect(file) {
-        if (!file) return;
+    let _selectedFiles = [];
+
+    function handleFilesSelect(files) {
         const maxMB = 25;
-        if (file.size > maxMB * 1024 * 1024) {
-            uploadMsg.textContent = 'Datei zu groß (max ' + maxMB + ' MB)';
+        const maxCount = 10;
+        _selectedFiles = [];
+        previewGrid.innerHTML = '';
+        previewGrid.style.display = 'none';
+
+        const valid = Array.from(files).slice(0, maxCount);
+        let errors = 0;
+
+        valid.forEach(function(file) {
+            if (file.size > maxMB * 1024 * 1024) {
+                errors++;
+                const div = document.createElement('div');
+                div.className = 'omm-prev-err';
+                div.textContent = '❌ zu groß';
+                previewGrid.appendChild(div);
+                return;
+            }
+            _selectedFiles.push(file);
+            const img = document.createElement('img');
+            const reader = new FileReader();
+            reader.onload = function(e){ img.src = e.target.result; };
+            reader.readAsDataURL(file);
+            previewGrid.appendChild(img);
+        });
+
+        if (_selectedFiles.length > 0 || errors > 0) {
+            previewGrid.style.display = 'grid';
+        }
+
+        if (_selectedFiles.length === 0) {
+            uploadMsg.textContent = 'Keine gültigen Fotos ausgewählt.';
             uploadMsg.style.color = '#f87171';
             uploadSend.disabled = true;
-            return;
+        } else {
+            const total = (Array.from(files).reduce(function(s,f){ return s + f.size; }, 0) / 1024 / 1024).toFixed(1);
+            uploadMsg.textContent = _selectedFiles.length + ' Foto' + (_selectedFiles.length > 1 ? 's' : '') + ' ausgewählt' + (errors ? ' (' + errors + ' zu groß — übersprungen)' : '') + ' — ' + total + ' MB gesamt';
+            uploadMsg.style.color = 'rgba(255,255,255,.5)';
+            uploadSend.textContent = _selectedFiles.length > 1 ? _selectedFiles.length + ' Fotos hochladen' : 'Hochladen';
+            uploadSend.disabled = false;
         }
-        uploadMsg.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
-        uploadMsg.style.color = 'rgba(255,255,255,.5)';
-        uploadSend.disabled = false;
-        const reader = new FileReader();
-        reader.onload = function(e){ dropPreview.src = e.target.result; dropPreview.style.display = 'block'; };
-        reader.readAsDataURL(file);
     }
 
-    uploadFile.addEventListener('change', function(){ handleFileSelect(this.files[0]); });
+    uploadFile.addEventListener('change', function(){ handleFilesSelect(this.files); });
 
     // Drag & Drop
     dropZone.addEventListener('dragover', function(e){ e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -725,126 +756,100 @@ $fotos_json = array_map( function( $f ) {
     dropZone.addEventListener('drop', function(e){
         e.preventDefault();
         dropZone.classList.remove('drag-over');
-        const f = e.dataTransfer.files[0];
-        if (f) { uploadFile.files = e.dataTransfer.files; handleFileSelect(f); }
+        handleFilesSelect(e.dataTransfer.files);
     });
 
     uploadSend.addEventListener('click', function(){
-        const file = uploadFile.files[0];
-        if (!file) return;
+        if (!_selectedFiles.length) return;
 
         uploadSend.disabled = true;
-        uploadSend.textContent = 'Lädt...';
-        uploadMsg.textContent = '';
         uploadProg.style.display = 'block';
         uploadBar.style.width = '0';
 
-        const fd = new FormData();
-        fd.append('datei', file);
-        fd.append('is_public', uploadPublic.checked ? '1' : '0');
+        const isPublic = uploadPublic.checked ? '1' : '0';
+        let idx = 0;
+        const total = _selectedFiles.length;
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', REST + '/foto/user-upload');
-        xhr.setRequestHeader('X-WP-Nonce', NONCE);
-
-        xhr.upload.addEventListener('progress', function(e){
-            if (e.lengthComputable) {
-                const pct = Math.round(e.loaded / e.total * 100);
-                uploadBar.style.width = pct + '%';
-                uploadMsg.textContent = pct + '%';
-                uploadMsg.style.color = 'rgba(255,255,255,.5)';
+        function uploadNext() {
+            if (idx >= total) {
+                uploadBar.style.width = '100%';
+                uploadMsg.textContent = '✅ ' + total + ' Foto' + (total > 1 ? 's' : '') + ' hochgeladen!';
+                uploadMsg.style.color = '#4ade80';
+                uploadSend.disabled = false;
+                uploadSend.textContent = 'Hochladen';
+                lbBuilt = false;
+                updateFotoCount();
+                setTimeout(closeUploadModal, 1500);
+                return;
             }
-        });
 
-        xhr.addEventListener('load', function(){
-            uploadSend.disabled = false;
-            uploadSend.textContent = 'Hochladen';
-            try {
-                const d = JSON.parse(xhr.responseText);
-                if (d.success) {
-                    uploadBar.style.width = '100%';
-                    uploadMsg.textContent = '✅ Hochgeladen!';
-                    uploadMsg.style.color = '#4ade80';
+            const file = _selectedFiles[idx];
+            uploadMsg.textContent = 'Foto ' + (idx+1) + ' von ' + total + ' — ' + file.name;
+            uploadMsg.style.color = 'rgba(255,255,255,.5)';
 
-                    // Neues Foto in FOTOS-Array vorne einfuegen
-                    const newF = {
-                        id: d.foto_id,
-                        url: d.url,
-                        is_public: d.is_public,
-                        like_count: 0,
-                        user_liked: 0,
-                        shot_at: '',
-                        is_video: 0,
-                    };
-                    FOTOS.unshift(newF);
+            const fd = new FormData();
+            fd.append('datei', file);
+            fd.append('is_public', isPublic);
 
-                    // Neue Karte oben im Grid einfügen
-                    const grid = document.getElementById('omm-fotos-grid');
-                    if (grid) {
-                        const card = document.createElement('div');
-                        card.className = 'omm-foto-card';
-                        card.dataset.fotoId = d.foto_id;
-                        card.dataset.idx = '0';
-                        card.dataset.public = d.is_public;
-                        card.style.opacity = '0';
-                        card.style.transform = 'scale(.9)';
-                        card.style.transition = 'opacity .3s,transform .3s';
-                        card.innerHTML = '<img src="'+d.url+'" alt="ÖMM Foto" />';
-                        if (d.is_public) {
-                            const badge = document.createElement('div');
-                            badge.className = 'omm-foto-badge-pub';
-                            badge.textContent = 'ÖFFENTLICH';
-                            card.appendChild(badge);
-                        }
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', REST + '/foto/user-upload');
+            xhr.setRequestHeader('X-WP-Nonce', NONCE);
 
-                        // Overlay mit Buttons
-                        const overlay = document.createElement('div');
-                        overlay.className = 'omm-foto-overlay';
-                        overlay.innerHTML =
-                            '<button class="omm-foto-btn '+(d.is_public?'omm-btn-public':'omm-btn-private')+' omm-toggle-public" data-foto-id="'+d.foto_id+'" data-public="'+d.is_public+'">'+(d.is_public?'🌍':'🔒')+'</button>'
-                            +'<button class="omm-foto-btn omm-btn-like omm-toggle-like" data-foto-id="'+d.foto_id+'">❤️ <span class="like-count">0</span></button>'
-                            +'<a class="omm-foto-btn omm-btn-download omm-dl-foto" href="'+d.url+'&dl=1" download onclick="event.stopPropagation()">⬇️</a>'
-                            +'<button class="omm-foto-btn omm-btn-delete omm-delete-foto" data-foto-id="'+d.foto_id+'" title="Foto löschen">🗑️</button>';
-                        card.appendChild(overlay);
-
-                        // Click-Handler für Lightbox rebuild
-                        card.addEventListener('click', function(){
-                            lbBuilt = false; lbTrack.innerHTML=''; lbDots.innerHTML=''; lbAct.innerHTML='';
-                            openAt(0);
-                        });
-
-                        grid.insertBefore(card, grid.firstChild);
-                        requestAnimationFrame(function(){
-                            requestAnimationFrame(function(){
-                                card.style.opacity = '1';
-                                card.style.transform = 'scale(1)';
-                            });
-                        });
-                    }
-
-                    // Lightbox rebuild erzwingen
-                    lbBuilt = false;
-
-                    setTimeout(closeUploadModal, 1500);
-                    updateFotoCount();
-                } else {
-                    uploadMsg.textContent = '❌ ' + (d.message || 'Fehler beim Hochladen');
-                    uploadMsg.style.color = '#f87171';
+            xhr.upload.addEventListener('progress', function(e){
+                if (e.lengthComputable) {
+                    const filePct = e.loaded / e.total;
+                    const overallPct = Math.round(((idx + filePct) / total) * 100);
+                    uploadBar.style.width = overallPct + '%';
                 }
-            } catch(e) {
-                uploadMsg.textContent = '❌ Serverfehler';
-                uploadMsg.style.color = '#f87171';
-            }
-        });
+            });
 
-        xhr.addEventListener('error', function(){
-            uploadSend.disabled = false;
-            uploadSend.textContent = 'Hochladen';
-            uploadMsg.textContent = '❌ Netzwerkfehler';
-            uploadMsg.style.color = '#f87171';
-        });
+            xhr.addEventListener('load', function(){
+                try {
+                    const d = JSON.parse(xhr.responseText);
+                    if (d.success) {
+                        const newF = { id:d.foto_id, url:d.url, is_public:d.is_public, like_count:0, user_liked:0, shot_at:'', is_video:0 };
+                        FOTOS.unshift(newF);
+                        const grid = document.getElementById('omm-fotos-grid');
+                        if (grid) {
+                            const card = document.createElement('div');
+                            card.className = 'omm-foto-card';
+                            card.dataset.fotoId = d.foto_id;
+                            card.dataset.idx = '0';
+                            card.dataset.public = d.is_public;
+                            card.style.opacity = '0'; card.style.transform = 'scale(.9)'; card.style.transition = 'opacity .3s,transform .3s';
+                            card.innerHTML = '<img src="'+d.url+'" alt="ÖMM Foto" />';
+                            if (d.is_public) { const b=document.createElement('div'); b.className='omm-foto-badge-pub'; b.textContent='ÖFFENTLICH'; card.appendChild(b); }
+                            const ov = document.createElement('div'); ov.className = 'omm-foto-overlay';
+                            ov.innerHTML = '<button class="omm-foto-btn '+(d.is_public?'omm-btn-public':'omm-btn-private')+' omm-toggle-public" data-foto-id="'+d.foto_id+'" data-public="'+d.is_public+'">'+(d.is_public?'🌍':'🔒')+'</button>'
+                                +'<button class="omm-foto-btn omm-btn-like omm-toggle-like" data-foto-id="'+d.foto_id+'">❤️ <span class="like-count">0</span></button>'
+                                +'<a class="omm-foto-btn omm-btn-download" href="'+d.url+'&dl=1" download onclick="event.stopPropagation()">⬇️</a>'
+                                +'<button class="omm-foto-btn omm-btn-delete omm-delete-foto" data-foto-id="'+d.foto_id+'">🗑️</button>';
+                            card.appendChild(ov);
+                            card.addEventListener('click', function(){ lbBuilt=false; lbTrack.innerHTML=''; lbDots.innerHTML=''; lbAct.innerHTML=''; openAt(0); });
+                            grid.insertBefore(card, grid.firstChild);
+                            requestAnimationFrame(function(){ requestAnimationFrame(function(){ card.style.opacity='1'; card.style.transform='scale(1)'; }); });
+                        }
+                        // Vorschau-Thumbnail als erledigt markieren
+                        const prevImg = previewGrid.querySelectorAll('img')[idx];
+                        if (prevImg) prevImg.style.outline = '2px solid #4ade80';
+                    } else {
+                        const prevImg = previewGrid.querySelectorAll('img')[idx];
+                        if (prevImg) { prevImg.style.outline = '2px solid #f87171'; prevImg.style.opacity='.4'; }
+                    }
+                } catch(e) {}
+                idx++;
+                uploadNext();
+            });
 
-        xhr.send(fd);
+            xhr.addEventListener('error', function(){
+                idx++;
+                uploadNext();
+            });
+
+            xhr.send(fd);
+        }
+
+        uploadNext();
     });
 
     function updateFotoCount() {
