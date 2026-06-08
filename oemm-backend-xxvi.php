@@ -3,14 +3,14 @@
  * Plugin Name: ÖMM Backend XXVI
  * Plugin URI:  https://mopedmarathon.at
  * Description: Login → HA-Gate → Dashboard. Schönes blaues Dashboard mit echten WooCommerce-Daten. PDF in Downloads.
- * Version:     2.3.10
+ * Version:     2.3.11
  * Author:      Manuel Ribis GmbH
  * Text Domain: oemm-xxvi
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OEMM_XXVI_VERSION', '2.3.10' );
+define( 'OEMM_XXVI_VERSION', '2.3.11' );
 define( 'OEMM_XXVI_GITHUB_REPO', 'whiterabbitmediayt-jpg/oemm-backend-xxvi' );
 define( 'OEMM_XXVI_PLUGIN_SLUG', 'oemm-backend-xxvi/oemm-backend-xxvi.php' );
 
@@ -67,6 +67,14 @@ add_action( 'upgrader_process_complete', function() {
 }, 10, 0 );
 define( 'OEMM_XXVI_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'OEMM_XXVI_URL',     plugin_dir_url( __FILE__ ) );
+
+// tFPDF global laden (muss vor Klassendeklaration tFPDF_OMM stehen)
+if ( ! defined('FPDF_FONTPATH') ) {
+    define( 'FPDF_FONTPATH', OEMM_XXVI_PATH . 'lib/' );
+}
+if ( ! class_exists('tFPDF') ) {
+    require_once OEMM_XXVI_PATH . 'lib/tfpdf.php';
+}
 define( 'OEMM_XXVI_TABLE',        'oemm_xxvi_agreements' );
 define( 'OEMM_XXVI_FOTOS_TABLE',  'oemm_xxvi_fotos' );
 define( 'OEMM_XXVI_LIKES_TABLE',  'oemm_xxvi_foto_likes' );
@@ -1031,16 +1039,8 @@ function oemm_xxvi_download_handler() {
 }
 
 function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $sig_png ) {
-    // tFPDF laden (UTF-8/Umlaut-fähig, Drop-In für FPDF)
-    if ( ! class_exists('tFPDF') ) {
-        require_once OEMM_XXVI_PATH . 'lib/tfpdf.php';
-    }
-    // tFPDF fontpath via define setzen (protected property, nur so von außen setzbar)
-    if ( ! defined('FPDF_FONTPATH') ) {
-        define( 'FPDF_FONTPATH', OEMM_XXVI_PATH . 'lib/' );
-    }
-
-    $pdf = new tFPDF('P', 'mm', 'A4');
+    // tFPDF_OMM wird global geladen (siehe oben nach OEMM_XXVI_PATH define)
+    $pdf = new tFPDF_OMM('P', 'mm', 'A4');
     $pdf->SetAutoPageBreak(true, 18);
     $pdf->SetMargins(20, 20, 20);
 
@@ -1232,43 +1232,39 @@ function oemm_xxvi_generate_pdf( $filepath, $fullname, $username, $signed_ts, $s
     $pdf->Output('F', $filepath);
 }
 
-// RoundedRect Hilfsfunktion (FPDF Erweiterung)
-if ( ! function_exists('fpdf_rounded_rect_patched') ) {
-    // Inline-Patch fuer FPDF::RoundedRect falls nicht vorhanden
-    if ( class_exists('FPDF') && ! method_exists('FPDF', 'RoundedRect') ) {
-        class FPDF_OMM extends FPDF {
-            public function RoundedRect($x, $y, $w, $h, $r, $style='') {
-                $k=$this->k; $hp=$this->h;
-                if($style=='F') $op='f';
-                elseif($style=='FD'||$style=='DF') $op='B';
-                else $op='S';
-                $MyArc=4/3*(sqrt(2)-1);
-                $this->_out(sprintf('%.2F %.2F m',($x+$r)*$k,($hp-$y)*$k));
-                $xc=$x+$w-$r; $yc=$y+$r;
-                $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-$y)*$k));
-                $this->_Arc($xc,$yc,$r,90,0);
-                $xc=$x+$w-$r; $yc=$y+$h-$r;
-                $this->_out(sprintf('%.2F %.2F l',($x+$w)*$k,($hp-$yc)*$k));
-                $this->_Arc($xc,$yc,$r,0,-90);
-                $xc=$x+$r; $yc=$y+$h-$r;
-                $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-($y+$h))*$k));
-                $this->_Arc($xc,$yc,$r,-90,-180);
-                $xc=$x+$r; $yc=$y+$r;
-                $this->_out(sprintf('%.2F %.2F l',($x)*$k,($hp-$yc)*$k));
-                $this->_Arc($xc,$yc,$r,180,90);
-                $this->_out($op);
-            }
-            private function _Arc($x1,$y1,$r,$a1,$a2) {
-                $a1=deg2rad($a1); $a2=deg2rad($a2);
-                $b=$r*4/3*(1-cos(($a1-$a2)/2))/sin(($a1-$a2)/2);
-                $x2=$x1+$r*cos($a1); $y2=$y1-$r*sin($a1);
-                $x3=$x1+$r*cos($a2); $y3=$y1-$r*sin($a2);
-                $k=$this->k; $hp=$this->h;
-                $this->_out(sprintf('%.2F %.2F %.2F %.2F %.2F %.2F c',
-                    ($x2-$b*sin($a1))*$k, ($hp-($y2-$b*cos($a1)))*$k,
-                    ($x3+$b*sin($a2))*$k, ($hp-($y3+$b*cos($a2)))*$k,
-                    $x3*$k, ($hp-$y3)*$k));
-            }
+// tFPDF_OMM: tFPDF Subklasse mit RoundedRect (UTF-8 fähig, kein FPDF nötig)
+if ( ! class_exists('tFPDF_OMM') ) {
+    class tFPDF_OMM extends tFPDF {
+        public function RoundedRect($x, $y, $w, $h, $r, $style='') {
+            $k=$this->k; $hp=$this->h;
+            if($style=='F') $op='f';
+            elseif($style=='FD'||$style=='DF') $op='B';
+            else $op='S';
+            $this->_out(sprintf('%.2F %.2F m',($x+$r)*$k,($hp-$y)*$k));
+            $xc=$x+$w-$r; $yc=$y+$r;
+            $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-$y)*$k));
+            $this->_Arc2($xc,$yc,$r,90,0);
+            $xc=$x+$w-$r; $yc=$y+$h-$r;
+            $this->_out(sprintf('%.2F %.2F l',($x+$w)*$k,($hp-$yc)*$k));
+            $this->_Arc2($xc,$yc,$r,0,-90);
+            $xc=$x+$r; $yc=$y+$h-$r;
+            $this->_out(sprintf('%.2F %.2F l',$xc*$k,($hp-($y+$h))*$k));
+            $this->_Arc2($xc,$yc,$r,-90,-180);
+            $xc=$x+$r; $yc=$y+$r;
+            $this->_out(sprintf('%.2F %.2F l',($x)*$k,($hp-$yc)*$k));
+            $this->_Arc2($xc,$yc,$r,180,90);
+            $this->_out($op);
+        }
+        private function _Arc2($x1,$y1,$r,$a1,$a2) {
+            $a1=deg2rad($a1); $a2=deg2rad($a2);
+            $b=$r*4/3*(1-cos(($a1-$a2)/2))/sin(($a1-$a2)/2);
+            $x2=$x1+$r*cos($a1); $y2=$y1-$r*sin($a1);
+            $x3=$x1+$r*cos($a2); $y3=$y1-$r*sin($a2);
+            $k=$this->k; $hp=$this->h;
+            $this->_out(sprintf('%.2F %.2F %.2F %.2F %.2F %.2F c',
+                ($x2-$b*sin($a1))*$k, ($hp-($y2-$b*cos($a1)))*$k,
+                ($x3+$b*sin($a2))*$k, ($hp-($y3+$b*cos($a2)))*$k,
+                $x3*$k, ($hp-$y3)*$k));
         }
     }
 }
